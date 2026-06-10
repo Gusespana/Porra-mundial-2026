@@ -145,6 +145,11 @@
   .modal-box { background:var(--gris-oscuro); border:1px solid var(--dorado); border-radius:14px; max-width:780px; width:100%; padding:24px 22px; margin:24px auto; position:relative; }
   .modal-close { position:absolute; top:10px; right:12px; background:none; border:none; color:var(--texto-muted); font-size:24px; cursor:pointer; line-height:1; }
   .modal-close:hover { color:var(--blanco); }
+  .pago-badge { font-size:10.5px; padding:3px 9px; border-radius:12px; font-weight:600; letter-spacing:.5px; display:inline-block; margin-top:4px; }
+  .pago-badge.si { background:rgba(39,174,96,.15); color:#6bcf94; border:1px solid var(--success); }
+  .pago-badge.no { background:rgba(255,255,255,.06); color:var(--texto-muted); border:1px solid var(--gris); }
+  .pago-toggle { display:flex; align-items:center; gap:6px; font-size:12px; color:#ccc; cursor:pointer; user-select:none; }
+  .pago-toggle input { width:auto; accent-color:var(--success); cursor:pointer; }
   .nombre-link { cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; }
   .nombre-link:hover { color:var(--dorado-claro); }
   .detalle-partido { display:grid; grid-template-columns:auto 1fr auto auto; gap:8px; font-size:12.5px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.05); align-items:center; }
@@ -370,7 +375,7 @@
       </div>
       <div class="card">
         <div class="card-title">🗂️ Gestionar apuestas</div>
-        <p class="nota" style="margin-bottom:12px">Borra apuestas erróneas o duplicadas. El borrado se hace en la nube con tu clave de organizador.</p>
+        <p class="nota" style="margin-bottom:12px">Marca aquí quién ha pagado la cuota (se ve en la lista pública de participantes) y borra apuestas erróneas. Ambas acciones se hacen en la nube con tu clave de organizador.</p>
         <div id="gestion-apuestas"></div>
       </div>
       <div class="card">
@@ -703,7 +708,7 @@ async function registrar() {
       return regError('❌ No se pudo guardar en la nube: ' + e.message);
     }
   }
-  participantes.push({ id: nuevoId, nombre, ...datos, puntos: 0, detalle: {}, exactosTotal: 0 });
+  participantes.push({ id: nuevoId, nombre, ...datos, pagado: false, puntos: 0, detalle: {}, exactosTotal: 0 });
   store.set('participantes', participantes);
   recalcularTodo();
   hacerBackup('registro');
@@ -800,11 +805,13 @@ function recalcularTodo() {
 function renderParticipantes() {
   const el = document.getElementById('lista-participantes');
   if (!participantes.length) { el.innerHTML = '<div class="empty-state"><span>🤷</span><p>Aún no hay participantes. ¡Sé el primero!</p></div>'; return; }
-  el.innerHTML = participantes.map(p => {
+  const pagadas = participantes.filter(p => p.pagado).length;
+  el.innerHTML = `<p class="nota" style="margin-bottom:10px">💰 Cuotas pagadas: <strong style="color:${pagadas === participantes.length ? 'var(--success)' : 'var(--dorado-claro)'}">${pagadas}/${participantes.length}</strong></p>` + participantes.map(p => {
     const r32 = buildR32(p.scores), pp = r32 ? propagate(r32, p.winners) : null;
     const camp = p.winners['final'] || '—';
     return `<div class="participant-card-mini">
-      <div><div style="font-weight:600" class="nombre-link" onclick="verApuesta('${String(p.id)}')">${esc(p.nombre)} 🔍</div></div>
+      <div><div style="font-weight:600" class="nombre-link" onclick="verApuesta('${String(p.id)}')">${esc(p.nombre)} 🔍</div>
+        <span class="pago-badge ${p.pagado ? 'si' : 'no'}">${p.pagado ? '💰 Cuota pagada' : '⏳ Cuota pendiente'}</span></div>
       <div>
         <span class="pred-tag ${resultados.winners['final'] && camp === resultados.winners['final'] ? 'hit' : ''}">🥇 ${esc(camp)}</span>
         <span class="pred-tag">⚽ ${esc(p.extras.goleador || '—')}</span>
@@ -830,7 +837,7 @@ function renderClasificacion() {
         `<span class="pred-tag hit" style="font-size:10px">+${v.pts}${v.n ? ' (' + v.n + '×)' : ''} ${labels[k] || k}</span>`).join('');
       return `<tr>
         <td class="rank-pos ${i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : ''}">${trofeos[i] || i + 1}</td>
-        <td><div class="rank-name nombre-link" onclick="verApuesta('${String(p.id)}')">${esc(p.nombre)}</div>${premio}</td>
+        <td><div class="rank-name nombre-link" onclick="verApuesta('${String(p.id)}')">${esc(p.nombre)} <span title="${p.pagado ? 'Cuota pagada' : 'Cuota pendiente'}" style="font-size:12px">${p.pagado ? '💰' : '⏳'}</span></div>${premio}</td>
         <td>${det || '<span style="font-size:11px;color:var(--texto-muted)">Sin puntos aún</span>'}</td>
         <td class="rank-pts">${p.puntos}</td></tr>`;
     }).join('')}</tbody></table>`;
@@ -926,10 +933,10 @@ async function cargarNube(silencioso) {
   }
   try {
     const [aps, res] = await Promise.all([
-      sbFetch('/rest/v1/apuestas?select=id,nombre,datos&order=created_at.asc'),
+      sbFetch('/rest/v1/apuestas?select=id,nombre,datos,pagado&order=created_at.asc'),
       sbFetch('/rest/v1/resultados?id=eq.1&select=datos')
     ]);
-    participantes = (aps || []).map(r => ({ id: r.id, nombre: r.nombre, puntos: 0, detalle: {}, exactosTotal: 0, ...r.datos }));
+    participantes = (aps || []).map(r => ({ id: r.id, nombre: r.nombre, pagado: r.pagado === true, puntos: 0, detalle: {}, exactosTotal: 0, ...r.datos }));
     if (res && res[0] && res[0].datos) {
       resultados = Object.assign({ scores: {}, winners: {}, finalScore: { g1: null, g2: null }, extras: {} }, res[0].datos);
     }
@@ -978,9 +985,33 @@ function renderGestionApuestas() {
   const el = document.getElementById('gestion-apuestas');
   if (!el) return;
   el.innerHTML = participantes.length
-    ? participantes.map(p => `<div class="participant-card-mini"><div style="font-weight:600">${esc(p.nombre)}</div>
-        <button class="btn btn-danger" onclick="borrarApuesta(${JSON.stringify(p.id)}, '${esc(p.nombre).replace(/'/g, "\\'")}')">🗑️ Borrar</button></div>`).join('')
+    ? participantes.map(p => `<div class="participant-card-mini">
+        <div><div style="font-weight:600">${esc(p.nombre)}</div>
+          <span class="pago-badge ${p.pagado ? 'si' : 'no'}">${p.pagado ? '💰 Pagada' : '⏳ Pendiente'}</span></div>
+        <div style="display:flex; gap:14px; align-items:center;">
+          <label class="pago-toggle"><input type="checkbox" ${p.pagado ? 'checked' : ''} onchange="togglePago('${String(p.id)}', this.checked, this)"> Cuota pagada</label>
+          <button class="btn btn-danger" onclick="borrarApuesta(${JSON.stringify(p.id)}, '${esc(p.nombre).replace(/'/g, "\\'")}')">🗑️ Borrar</button>
+        </div></div>`).join('')
     : '<p class="nota">No hay apuestas registradas.</p>';
+}
+
+async function togglePago(id, pagado, checkbox) {
+  const p = participantes.find(x => String(x.id) === String(id));
+  if (!p) return;
+  try {
+    if (nubeActiva()) {
+      await sbFetch('/rest/v1/rpc/marcar_pago', { method: 'POST', body: JSON.stringify({ p_id: p.id, p_pagado: pagado, p_clave: adminClave }) });
+    }
+    p.pagado = pagado;
+    store.set('participantes', participantes);
+    renderGestionApuestas();
+    renderParticipantes();
+    renderClasificacion();
+    showMsg('admin-msg', 'success', `✅ Cuota de ${p.nombre}: ${pagado ? 'PAGADA 💰' : 'pendiente ⏳'}.`);
+  } catch (e) {
+    if (checkbox) checkbox.checked = !pagado;   // revertir el tic si falla
+    showMsg('admin-msg', 'error', '❌ No se pudo actualizar el pago: ' + e.message + '. ¿Has ejecutado el SQL de control de pago en Supabase?');
+  }
 }
 
 // ═════════════════ SINCRONIZACIÓN AUTOMÁTICA (openfootball) ═════════════════
@@ -1277,7 +1308,7 @@ function verApuesta(id) {
   const loserOf = (pair, w) => (!pair[0] || !pair[1] || !w) ? null : (pair[0] === w ? pair[1] : pair[0]);
 
   let html = `<div class="card-title" style="margin-bottom:4px">📋 Apuesta de ${esc(p.nombre)}</div>
-    <p class="nota" style="margin-bottom:14px">Puntos actuales: <strong style="color:var(--dorado)">${p.puntos || 0}</strong> · Las apuestas son inmutables una vez registradas.</p>`;
+    <p class="nota" style="margin-bottom:14px">Puntos actuales: <strong style="color:var(--dorado)">${p.puntos || 0}</strong> · <span class="pago-badge ${p.pagado ? 'si' : 'no'}" style="margin:0">${p.pagado ? '💰 Cuota pagada' : '⏳ Cuota pendiente'}</span> · Las apuestas son inmutables una vez registradas.</p>`;
 
   // ── Títulos y extras ──
   const camp = p.winners['final'] || '—';
