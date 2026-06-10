@@ -367,6 +367,20 @@
             <span class="nota">Ej: <code>porra-mundial-2026_2026-06-10_18-32-05.json</code></span>
           </div>
         </div>
+        <hr class="divider">
+        <div class="subtitle" style="margin-top:0">⏰ Copia automática diaria</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Estado</label>
+            <label class="pago-toggle" style="padding:10px 0"><input type="checkbox" id="auto-backup-on" onchange="guardarConfigAutoBackup()"> Activar copias automáticas</label>
+          </div>
+          <div class="field">
+            <label>Horas (separadas por comas, formato HH:MM)</label>
+            <input type="text" id="auto-backup-horas" placeholder="14:00, 17:00" oninput="guardarConfigAutoBackup()">
+            <span class="nota" id="auto-backup-estado"></span>
+          </div>
+        </div>
+        <p class="nota" style="margin-top:8px">ℹ️ La copia se hace si la porra está abierta en tu navegador a esa hora. Si la abres más tarde, la copia pendiente del día se hace automáticamente al cargar. Para copias 24/7 independientes del navegador, ejecuta también el SQL de backup en servidor.</p>
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
           <button class="btn" style="background:var(--verde); color:#fff; padding:10px 18px; font-size:12px" onclick="hacerBackup('manual')">💾 Hacer copia ahora</button>
           <button class="btn" style="background:var(--gris); color:var(--blanco); padding:10px 18px; font-size:12px" onclick="document.getElementById('backup-restore-file').click()">📥 Restaurar desde archivo</button>
@@ -400,8 +414,8 @@
 'use strict';
 // ═════════════════ CONFIGURACIÓN (edítala a tu gusto) ═════════════════
 // ── SUPABASE: pega aquí la URL y la anon key de tu proyecto ──
-const SUPABASE_URL = 'https://ptqmhiwiywydsrnxthna.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cW1oaXdpeXd5ZHNybnh0aG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwODAxNjcsImV4cCI6MjA5NjY1NjE2N30.zVd2NQWm9oavagpP-vveY3E5yDuCf5SxK1Qyp6b0xks';
+const SUPABASE_URL = 'https://TU-PROYECTO.supabase.co';
+const SUPABASE_ANON_KEY = 'PEGA_AQUI_TU_ANON_KEY';
 const nubeActiva = () => !SUPABASE_URL.includes('TU-PROYECTO') && SUPABASE_ANON_KEY.length > 30;
 let adminClave = null;   // se guarda en memoria al entrar al panel
 
@@ -863,6 +877,10 @@ async function checkAdmin() {
   renderBracket('res-bracket', 'res');
   cargarExtrasAdmin();
   renderGestionApuestas();
+  const cfgAB = configAutoBackup();
+  document.getElementById('auto-backup-on').checked = cfgAB.on;
+  document.getElementById('auto-backup-horas').value = cfgAB.horas.join(', ');
+  pintarEstadoAutoBackup();
 }
 function onResExtra() {
   resultados.extras = {
@@ -1233,7 +1251,7 @@ function nombreArchivoBackup() {
 
 async function hacerBackup(motivo) {
   const json = datosBackup(motivo);
-  const nombre = motivo === 'resultados' ? prefijoBackup() + '_ultimo-resultados.json' : nombreArchivoBackup();
+  const nombre = motivo === 'resultados' ? prefijoBackup() + '_ultimo-resultados.json' : nombreArchivoBackup().replace('.json', motivo === 'auto' ? '_auto.json' : '.json');
   // 1) Intentar escribir en la carpeta configurada
   if (backupDirHandle && await permisoCarpeta()) {
     try {
@@ -1245,7 +1263,7 @@ async function hacerBackup(motivo) {
     } catch (e) { /* cae al fallback de descarga */ }
   }
   // 2) Fallback: descarga (solo en eventos importantes para no molestar)
-  if (motivo === 'registro' || motivo === 'manual') {
+  if (motivo === 'registro' || motivo === 'manual' || motivo === 'auto') {
     const blob = new Blob([json], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = nombre;
@@ -1387,6 +1405,54 @@ function cerrarModal() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
 
+// ═════════════════ COPIA AUTOMÁTICA PROGRAMADA ═════════════════
+// Config en localStorage: { on: bool, horas: ['14:00','17:00'], hechas: { '14:00': ' 2026-06-10', ... } }
+function configAutoBackup() {
+  return store.get('autoBackup', { on: false, horas: ['14:00', '17:00'], hechas: {} });
+}
+
+function guardarConfigAutoBackup() {
+  const cfg = configAutoBackup();
+  cfg.on = document.getElementById('auto-backup-on').checked;
+  const horas = document.getElementById('auto-backup-horas').value
+    .split(',').map(s => s.trim()).filter(s => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s));
+  if (horas.length) cfg.horas = horas;
+  store.set('autoBackup', cfg);
+  pintarEstadoAutoBackup();
+}
+
+function pintarEstadoAutoBackup() {
+  const cfg = configAutoBackup();
+  const el = document.getElementById('auto-backup-estado');
+  if (!el) return;
+  if (!cfg.on) { el.textContent = 'Desactivada.'; return; }
+  const ahora = new Date();
+  const hoy = ahora.toISOString().slice(0, 10);
+  const pendientes = cfg.horas.filter(h => cfg.hechas[h] !== hoy);
+  el.textContent = `Activa: ${cfg.horas.join(', ')} · Hoy ${cfg.horas.length - pendientes.length}/${cfg.horas.length} hechas.`;
+}
+
+async function comprobarBackupAuto() {
+  const cfg = configAutoBackup();
+  if (!cfg.on) return;
+  const ahora = new Date();
+  const hoy = ahora.toISOString().slice(0, 10);
+  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  for (const h of cfg.horas) {
+    const [hh, mm] = h.split(':').map(Number);
+    if (minutosAhora >= hh * 60 + mm && cfg.hechas[h] !== hoy) {
+      const ok = await hacerBackup('auto');
+      if (ok) {
+        cfg.hechas[h] = hoy;
+        store.set('autoBackup', cfg);
+        showMsg('backup-msg', 'success', `⏰ Copia automática de las ${h} realizada (${new Date().toLocaleTimeString('es-ES')}).`);
+      }
+    }
+  }
+  pintarEstadoAutoBackup();
+}
+setInterval(comprobarBackupAuto, 60000);   // comprobar cada minuto
+
 // ═════════════════ UI GENERAL ═════════════════
 function actualizarEstadisticas() {
   const n = participantes.length, bote = n * CUOTA;
@@ -1426,6 +1492,7 @@ window.addEventListener('scroll', () => document.getElementById('fab').classList
   recalcularTodo();
   initBackup();
   cargarNube();
+  setTimeout(comprobarBackupAuto, 4000);   // catch-up: copia pendiente del día al abrir
 })();
 </script>
 </body>
