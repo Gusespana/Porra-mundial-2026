@@ -380,7 +380,22 @@
             <span class="nota" id="auto-backup-estado"></span>
           </div>
         </div>
-        <p class="nota" style="margin-top:8px">ℹ️ La copia se hace si la porra está abierta en tu navegador a esa hora. Si la abres más tarde, la copia pendiente del día se hace automáticamente al cargar. Para copias 24/7 independientes del navegador, ejecuta también el SQL de backup en servidor.</p>
+        <p class="nota" style="margin-top:8px">ℹ️ La copia se hace si la porra está abierta en tu navegador a esa hora. Si la abres más tarde, la copia pendiente del día se hace automáticamente al cargar.</p>
+        <hr class="divider">
+        <div class="subtitle" style="margin-top:0">🌩️ Copias en servidor (Supabase, 24/7)</div>
+        <p class="nota" style="margin-bottom:10px">Estas copias se hacen en el servidor aunque nadie tenga la web abierta. Indica las horas en <strong>hora española</strong>; la conversión a UTC es automática.</p>
+        <div class="msg" id="servidor-msg"></div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Horas de copia en servidor (HH:MM, separadas por comas)</label>
+            <input type="text" id="servidor-horas" placeholder="14:00, 17:00">
+          </div>
+          <div class="field" style="display:flex; align-items:flex-end; gap:10px;">
+            <button class="btn" style="background:var(--verde); color:#fff; padding:11px 18px; font-size:12px" onclick="guardarHorarioServidor()">💾 Guardar horario en servidor</button>
+            <button class="btn" style="background:var(--gris); color:var(--blanco); padding:11px 18px; font-size:12px" onclick="cargarEstadoServidor()">🔄 Ver estado</button>
+          </div>
+        </div>
+        <div id="servidor-estado" class="nota" style="margin-top:10px"></div>
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
           <button class="btn" style="background:var(--verde); color:#fff; padding:10px 18px; font-size:12px" onclick="hacerBackup('manual')">💾 Hacer copia ahora</button>
           <button class="btn" style="background:var(--gris); color:var(--blanco); padding:10px 18px; font-size:12px" onclick="document.getElementById('backup-restore-file').click()">📥 Restaurar desde archivo</button>
@@ -414,8 +429,8 @@
 'use strict';
 // ═════════════════ CONFIGURACIÓN (edítala a tu gusto) ═════════════════
 // ── SUPABASE: pega aquí la URL y la anon key de tu proyecto ──
-const SUPABASE_URL = 'https://ptqmhiwiywydsrnxthna.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cW1oaXdpeXd5ZHNybnh0aG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwODAxNjcsImV4cCI6MjA5NjY1NjE2N30.zVd2NQWm9oavagpP-vveY3E5yDuCf5SxK1Qyp6b0xks';
+const SUPABASE_URL = 'https://TU-PROYECTO.supabase.co';
+const SUPABASE_ANON_KEY = 'PEGA_AQUI_TU_ANON_KEY';
 const nubeActiva = () => !SUPABASE_URL.includes('TU-PROYECTO') && SUPABASE_ANON_KEY.length > 30;
 let adminClave = null;   // se guarda en memoria al entrar al panel
 
@@ -881,6 +896,7 @@ async function checkAdmin() {
   document.getElementById('auto-backup-on').checked = cfgAB.on;
   document.getElementById('auto-backup-horas').value = cfgAB.horas.join(', ');
   pintarEstadoAutoBackup();
+  cargarEstadoServidor();
 }
 function onResExtra() {
   resultados.extras = {
@@ -1452,6 +1468,56 @@ async function comprobarBackupAuto() {
   pintarEstadoAutoBackup();
 }
 setInterval(comprobarBackupAuto, 60000);   // comprobar cada minuto
+
+// ═════════════════ BACKUPS EN SERVIDOR (horario configurable) ═════════════════
+async function guardarHorarioServidor() {
+  if (!nubeActiva()) return showMsg('servidor-msg', 'error', '❌ Necesitas la nube activa para esto.');
+  const horas = document.getElementById('servidor-horas').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+  if (!horas.length || !horas.every(h => /^([01]?\d|2[0-3]):[0-5]\d$/.test(h)))
+    return showMsg('servidor-msg', 'error', '⚠️ Formato de horas no válido. Ejemplo: 14:00, 17:00');
+  try {
+    const creados = await sbFetch('/rest/v1/rpc/programar_backups', {
+      method: 'POST',
+      body: JSON.stringify({ p_horas: horas, p_clave: adminClave })
+    });
+    showMsg('servidor-msg', 'success', '✅ Horario guardado en el servidor: ' + creados.join(' · '));
+    cargarEstadoServidor();
+  } catch (e) {
+    showMsg('servidor-msg', 'error', '❌ No se pudo programar: ' + e.message +
+      (e.message.includes('does not exist') ? ' — ¿Has ejecutado el SQL "horario-backup-desde-web" en Supabase?' : ''));
+  }
+}
+
+async function cargarEstadoServidor() {
+  if (!nubeActiva() || !adminClave) return;
+  const el = document.getElementById('servidor-estado');
+  try {
+    const [horarios, snaps] = await Promise.all([
+      sbFetch('/rest/v1/rpc/ver_horarios_backup', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) }),
+      sbFetch('/rest/v1/rpc/listar_backups', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) })
+    ]);
+    // De la programación cron UTC ('mm hh * * *') a hora española (+2)
+    const horasES = (horarios || []).map(h => {
+      const m = h.programacion_utc.match(/^(\d{1,2}) (\d{1,2}) /);
+      if (!m) return h.programacion_utc;
+      return String((+m[2] + 2) % 24).padStart(2, '0') + ':' + String(+m[1]).padStart(2, '0');
+    }).sort();
+    if (document.getElementById('servidor-horas') && !document.getElementById('servidor-horas').value && horasES.length)
+      document.getElementById('servidor-horas').value = horasES.join(', ');
+    const listaSnaps = (snaps || []).map(s =>
+      `<div class="detalle-partido" style="grid-template-columns:auto 1fr auto">
+        <span class="dp-fecha">#${s.id}</span>
+        <span>${new Date(s.creado).toLocaleString('es-ES')}</span>
+        <span class="dp-real">${s.tamano_kb} KB</span>
+      </div>`).join('');
+    el.innerHTML = `<strong style="color:var(--dorado-claro)">Horario activo (hora española):</strong> ${horasES.join(', ') || 'ninguno'}<br>
+      <strong style="color:var(--dorado-claro)">Últimos snapshots en servidor:</strong>
+      ${listaSnaps || '<div class="nota">Todavía no hay snapshots.</div>'}`;
+  } catch (e) {
+    el.innerHTML = '<span style="color:var(--error)">No se pudo consultar el servidor: ' + esc(e.message) + '</span>';
+  }
+}
 
 // ═════════════════ UI GENERAL ═════════════════
 function actualizarEstadisticas() {
