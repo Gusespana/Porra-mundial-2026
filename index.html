@@ -83,6 +83,8 @@
   .grupo-body { padding:14px 16px; }
   .match-row { display:grid; grid-template-columns:1fr 54px 16px 54px 1fr; gap:8px; align-items:center; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.05); }
   .match-row:last-of-type { border-bottom:none; }
+  .match-fecha { font-size:10.5px; color:var(--dorado-claro); opacity:.8; letter-spacing:.5px; margin-top:9px; text-transform:uppercase; }
+  .match-fecha:first-child { margin-top:0; }
   .match-team { font-size:13.5px; }
   .match-team.right { text-align:right; }
   .match-vs { text-align:center; color:var(--texto-muted); font-size:11px; }
@@ -138,6 +140,18 @@
   .divider { border:none; border-top:1px solid var(--gris); margin:18px 0; }
   .empty-state { text-align:center; padding:46px 20px; color:var(--texto-muted); }
   .empty-state span { font-size:44px; display:block; margin-bottom:12px; }
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.78); display:none; z-index:300; padding:16px; overflow-y:auto; }
+  .modal-overlay.open { display:block; }
+  .modal-box { background:var(--gris-oscuro); border:1px solid var(--dorado); border-radius:14px; max-width:780px; width:100%; padding:24px 22px; margin:24px auto; position:relative; }
+  .modal-close { position:absolute; top:10px; right:12px; background:none; border:none; color:var(--texto-muted); font-size:24px; cursor:pointer; line-height:1; }
+  .modal-close:hover { color:var(--blanco); }
+  .nombre-link { cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; }
+  .nombre-link:hover { color:var(--dorado-claro); }
+  .detalle-partido { display:grid; grid-template-columns:auto 1fr auto auto; gap:8px; font-size:12.5px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.05); align-items:center; }
+  .detalle-partido .dp-fecha { color:var(--texto-muted); font-size:10px; min-width:78px; }
+  .detalle-partido .dp-real { color:var(--texto-muted); font-size:11px; }
+  .detalle-hit { font-size:13px; min-width:38px; text-align:right; }
+  .detalle-ronda { margin:6px 0 12px; display:flex; flex-wrap:wrap; gap:5px; }
   .fab { position:fixed; bottom:22px; right:22px; width:46px; height:46px; background:var(--dorado); color:var(--negro); border:none; border-radius:50%; font-size:20px; cursor:pointer; display:none; align-items:center; justify-content:center; z-index:200; box-shadow:0 4px 12px rgba(0,0,0,.4); }
   .fab.visible { display:flex; }
   .nota { font-size:12px; color:var(--texto-muted); line-height:1.5; }
@@ -233,7 +247,7 @@
 
     <div class="card">
       <div class="card-title">⚽ 2 · Fase de grupos — predice los 72 partidos <span class="nota" id="pred-grupos-progreso">(0/72)</span></div>
-      <p class="nota" style="margin-bottom:12px">Introduce el marcador de cada partido. La clasificación de cada grupo se calcula sola (3 pts victoria, 1 empate; desempate por diferencia de goles y goles a favor). Verde = clasificado directo, dorado = posible mejor tercero.</p>
+      <p class="nota" style="margin-bottom:12px">Introduce el marcador de cada partido. Los partidos están ordenados por fecha, con el horario en <strong>hora peninsular española</strong>. La clasificación de cada grupo se calcula sola (3 pts victoria, 1 empate; desempate por diferencia de goles y goles a favor). Verde = clasificado directo, dorado = posible mejor tercero.</p>
       <div id="pred-grupos"></div>
     </div>
 
@@ -264,7 +278,8 @@
       <div class="card-title">👥 Participantes inscritos
         <button class="btn" style="background:var(--gris); color:var(--blanco); padding:7px 14px; font-size:11px; margin-left:auto" onclick="cargarNube()">🔄 Actualizar</button>
       </div>
-      <p class="nube-estado nota" style="margin-bottom:12px"></p>
+      <p class="nube-estado nota" style="margin-bottom:4px"></p>
+      <p class="nota" style="margin-bottom:12px">💡 Pincha en el nombre de cualquier participante para ver su apuesta completa: los 72 marcadores, su cuadro y sus extras.</p>
       <div id="lista-participantes"></div>
     </div>
   </div>
@@ -309,7 +324,7 @@
       </div>
       <div class="card">
         <div class="card-title">⚽ Resultados reales — fase de grupos <span class="nota" id="res-grupos-progreso">(0/72)</span></div>
-        <p class="nota" style="margin-bottom:12px">Introduce los marcadores reales según se jueguen (o usa la sincronización automática de arriba). Los puntos de todos los participantes se recalculan automáticamente.</p>
+        <p class="nota" style="margin-bottom:12px">Introduce los marcadores reales según se jueguen, ordenados por fecha en hora peninsular española (o usa la sincronización automática de arriba). Los puntos de todos los participantes se recalculan automáticamente.</p>
         <div id="res-grupos"></div>
       </div>
       <div class="card">
@@ -367,14 +382,21 @@
 
 </div>
 
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)cerrarModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal()">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
 <button class="fab" id="fab" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
 <script>
 'use strict';
 // ═════════════════ CONFIGURACIÓN (edítala a tu gusto) ═════════════════
 // ── SUPABASE: pega aquí la URL y la anon key de tu proyecto ──
-const SUPABASE_URL = 'https://ptqmhiwiywydsrnxthna.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cW1oaXdpeXd5ZHNybnh0aG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwODAxNjcsImV4cCI6MjA5NjY1NjE2N30.zVd2NQWm9oavagpP-vveY3E5yDuCf5SxK1Qyp6b0xks';
+const SUPABASE_URL = 'https://TU-PROYECTO.supabase.co';
+const SUPABASE_ANON_KEY = 'PEGA_AQUI_TU_ANON_KEY';
 const nubeActiva = () => !SUPABASE_URL.includes('TU-PROYECTO') && SUPABASE_ANON_KEY.length > 30;
 let adminClave = null;   // se guarda en memoria al entrar al panel
 
@@ -405,6 +427,8 @@ const GRUPOS = {
 };
 const LETRAS = Object.keys(GRUPOS);
 const PAIRS = [[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]];
+// Fechas y horas oficiales de los 72 partidos de grupos, en hora peninsular española
+const CALENDARIO = {"A2":{"f":"jue 11 jun","h":"21:00","ts":1781204400000},"A3":{"f":"vie 12 jun","h":"04:00","ts":1781229600000},"A1":{"f":"jue 18 jun","h":"18:00","ts":1781798400000},"A0":{"f":"vie 19 jun","h":"03:00","ts":1781830800000},"A4":{"f":"jue 25 jun","h":"03:00","ts":1782349200000},"A5":{"f":"jue 25 jun","h":"03:00","ts":1782349200000},"B4":{"f":"vie 12 jun","h":"21:00","ts":1781290800000},"B5":{"f":"sáb 13 jun","h":"21:00","ts":1781377200000},"B3":{"f":"jue 18 jun","h":"21:00","ts":1781809200000},"B2":{"f":"vie 19 jun","h":"00:00","ts":1781820000000},"B0":{"f":"mié 24 jun","h":"21:00","ts":1782327600000},"B1":{"f":"mié 24 jun","h":"21:00","ts":1782327600000},"C0":{"f":"dom 14 jun","h":"00:00","ts":1781388000000},"C1":{"f":"dom 14 jun","h":"03:00","ts":1781398800000},"C5":{"f":"sáb 20 jun","h":"00:00","ts":1781906400000},"C4":{"f":"sáb 20 jun","h":"02:30","ts":1781915400000},"C2":{"f":"jue 25 jun","h":"00:00","ts":1782338400000},"C3":{"f":"jue 25 jun","h":"00:00","ts":1782338400000},"D2":{"f":"sáb 13 jun","h":"03:00","ts":1781312400000},"D3":{"f":"dom 14 jun","h":"06:00","ts":1781409600000},"D0":{"f":"vie 19 jun","h":"21:00","ts":1781895600000},"D1":{"f":"sáb 20 jun","h":"05:00","ts":1781924400000},"D4":{"f":"vie 26 jun","h":"04:00","ts":1782439200000},"D5":{"f":"vie 26 jun","h":"04:00","ts":1782439200000},"E4":{"f":"dom 14 jun","h":"19:00","ts":1781456400000},"E5":{"f":"lun 15 jun","h":"01:00","ts":1781478000000},"E2":{"f":"sáb 20 jun","h":"22:00","ts":1781985600000},"E3":{"f":"dom 21 jun","h":"02:00","ts":1782000000000},"E1":{"f":"jue 25 jun","h":"22:00","ts":1782417600000},"E0":{"f":"jue 25 jun","h":"22:00","ts":1782417600000},"F0":{"f":"dom 14 jun","h":"22:00","ts":1781467200000},"F1":{"f":"lun 15 jun","h":"04:00","ts":1781488800000},"F4":{"f":"sáb 20 jun","h":"19:00","ts":1781974800000},"F5":{"f":"dom 21 jun","h":"06:00","ts":1782014400000},"F3":{"f":"vie 26 jun","h":"01:00","ts":1782428400000},"F2":{"f":"vie 26 jun","h":"01:00","ts":1782428400000},"G2":{"f":"lun 15 jun","h":"21:00","ts":1781550000000},"G3":{"f":"mar 16 jun","h":"03:00","ts":1781571600000},"G0":{"f":"dom 21 jun","h":"21:00","ts":1782068400000},"G1":{"f":"lun 22 jun","h":"03:00","ts":1782090000000},"G5":{"f":"sáb 27 jun","h":"05:00","ts":1782529200000},"G4":{"f":"sáb 27 jun","h":"05:00","ts":1782529200000},"H4":{"f":"lun 15 jun","h":"18:00","ts":1781539200000},"H5":{"f":"mar 16 jun","h":"00:00","ts":1781560800000},"H2":{"f":"dom 21 jun","h":"18:00","ts":1782057600000},"H3":{"f":"lun 22 jun","h":"00:00","ts":1782079200000},"H1":{"f":"sáb 27 jun","h":"02:00","ts":1782518400000},"H0":{"f":"sáb 27 jun","h":"02:00","ts":1782518400000},"I0":{"f":"mar 16 jun","h":"21:00","ts":1781636400000},"I1":{"f":"mié 17 jun","h":"00:00","ts":1781647200000},"I4":{"f":"lun 22 jun","h":"23:00","ts":1782162000000},"I5":{"f":"mar 23 jun","h":"02:00","ts":1782172800000},"I2":{"f":"vie 26 jun","h":"21:00","ts":1782500400000},"I3":{"f":"vie 26 jun","h":"21:00","ts":1782500400000},"J2":{"f":"mié 17 jun","h":"03:00","ts":1781658000000},"J3":{"f":"mié 17 jun","h":"06:00","ts":1781668800000},"J0":{"f":"lun 22 jun","h":"19:00","ts":1782147600000},"J1":{"f":"mar 23 jun","h":"05:00","ts":1782183600000},"J5":{"f":"dom 28 jun","h":"04:00","ts":1782612000000},"J4":{"f":"dom 28 jun","h":"04:00","ts":1782612000000},"K4":{"f":"mié 17 jun","h":"19:00","ts":1781715600000},"K5":{"f":"jue 18 jun","h":"04:00","ts":1781748000000},"K2":{"f":"mar 23 jun","h":"19:00","ts":1782234000000},"K3":{"f":"mié 24 jun","h":"04:00","ts":1782266400000},"K0":{"f":"dom 28 jun","h":"01:30","ts":1782603000000},"K1":{"f":"dom 28 jun","h":"01:30","ts":1782603000000},"L0":{"f":"mié 17 jun","h":"22:00","ts":1781726400000},"L1":{"f":"jue 18 jun","h":"01:00","ts":1781737200000},"L4":{"f":"mar 23 jun","h":"22:00","ts":1782244800000},"L5":{"f":"mié 24 jun","h":"01:00","ts":1782255600000},"L2":{"f":"sáb 27 jun","h":"23:00","ts":1782594000000},"L3":{"f":"sáb 27 jun","h":"23:00","ts":1782594000000}};
 // Equipos no europeos ni sudamericanos (para "país sorpresa")
 const NO_EUR_SUD = ['México 🇲🇽','Corea del Sur 🇰🇷','Sudáfrica 🇿🇦','Canadá 🇨🇦','Catar 🇶🇦','Haití 🇭🇹','Estados Unidos 🇺🇸','Australia 🇦🇺','Costa de Marfil 🇨🇮','Curazao 🇨🇼','Japón 🇯🇵','Túnez 🇹🇳','Irán 🇮🇷','Egipto 🇪🇬','Nueva Zelanda 🇳🇿','Arabia Saudí 🇸🇦','Cabo Verde 🇨🇻','Senegal 🇸🇳','Irak 🇮🇶','Argelia 🇩🇿','Jordania 🇯🇴','Uzbekistán 🇺🇿','RD Congo 🇨🇩','Panamá 🇵🇦','Ghana 🇬🇭','Marruecos 🇲🇦'];
 // Plantilla de dieciseisavos: 1.º A-H vs mejores terceros (T1 = mejor 3.º), resto de 1.º vs 2.º, y 2.º entre sí
@@ -506,9 +530,11 @@ function renderGrupos(containerId, ctx) {
   const cont = document.getElementById(containerId);
   cont.innerHTML = LETRAS.map(L => {
     const teams = GRUPOS[L];
-    const filas = PAIRS.map((pair, i) => {
-      const id = L + i, s = state.scores[id] || [null, null];
-      return `<div class="match-row">
+    const orden = PAIRS.map((_, i) => i).sort((a, b) => ((CALENDARIO[L + a] || {}).ts || a) - ((CALENDARIO[L + b] || {}).ts || b));
+    const filas = orden.map(i => {
+      const pair = PAIRS[i], id = L + i, s = state.scores[id] || [null, null];
+      const cal = CALENDARIO[id];
+      return `${cal ? `<div class="match-fecha">📅 ${cal.f} · ${cal.h} h</div>` : ''}<div class="match-row">
         <div class="match-team right">${teams[pair[0]]}</div>
         <input type="number" min="0" max="20" value="${s[0] ?? ''}" oninput="onScore('${ctx}','${id}',0,this.value)">
         <div class="match-vs">—</div>
@@ -778,7 +804,7 @@ function renderParticipantes() {
     const r32 = buildR32(p.scores), pp = r32 ? propagate(r32, p.winners) : null;
     const camp = p.winners['final'] || '—';
     return `<div class="participant-card-mini">
-      <div><div style="font-weight:600">${esc(p.nombre)}</div></div>
+      <div><div style="font-weight:600" class="nombre-link" onclick="verApuesta('${String(p.id)}')">${esc(p.nombre)} 🔍</div></div>
       <div>
         <span class="pred-tag ${resultados.winners['final'] && camp === resultados.winners['final'] ? 'hit' : ''}">🥇 ${esc(camp)}</span>
         <span class="pred-tag">⚽ ${esc(p.extras.goleador || '—')}</span>
@@ -804,7 +830,7 @@ function renderClasificacion() {
         `<span class="pred-tag hit" style="font-size:10px">+${v.pts}${v.n ? ' (' + v.n + '×)' : ''} ${labels[k] || k}</span>`).join('');
       return `<tr>
         <td class="rank-pos ${i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : ''}">${trofeos[i] || i + 1}</td>
-        <td><div class="rank-name">${esc(p.nombre)}</div>${premio}</td>
+        <td><div class="rank-name nombre-link" onclick="verApuesta('${String(p.id)}')">${esc(p.nombre)}</div>${premio}</td>
         <td>${det || '<span style="font-size:11px;color:var(--texto-muted)">Sin puntos aún</span>'}</td>
         <td class="rank-pts">${p.puntos}</td></tr>`;
     }).join('')}</tbody></table>`;
@@ -1239,6 +1265,96 @@ async function initBackup() {
     if (h) { backupDirHandle = h; document.getElementById('backup-carpeta').value = '📁 ' + h.name; }
   } catch (e) {}
 }
+
+// ═════════════════ DETALLE DE APUESTA (modal) ═════════════════
+const NOMBRE_RONDA = { d16: 'Dieciseisavos', o8: 'Octavos', c4: 'Cuartos', sf: 'Semifinales' };
+
+function verApuesta(id) {
+  const p = participantes.find(x => String(x.id) === String(id));
+  if (!p) return;
+  const r32 = buildR32(p.scores);
+  const pp = r32 ? propagate(r32, p.winners) : null;
+  const loserOf = (pair, w) => (!pair[0] || !pair[1] || !w) ? null : (pair[0] === w ? pair[1] : pair[0]);
+
+  let html = `<div class="card-title" style="margin-bottom:4px">📋 Apuesta de ${esc(p.nombre)}</div>
+    <p class="nota" style="margin-bottom:14px">Puntos actuales: <strong style="color:var(--dorado)">${p.puntos || 0}</strong> · Las apuestas son inmutables una vez registradas.</p>`;
+
+  // ── Títulos y extras ──
+  const camp = p.winners['final'] || '—';
+  const sub = pp && pp.final[0][0] && pp.final[0][1] ? loserOf(pp.final[0], camp) : '—';
+  const ter = p.winners['tercer'] || '—';
+  const cua = pp && pp.tercer[0][0] && pp.tercer[0][1] ? loserOf(pp.tercer[0], ter) : '—';
+  const fin = pp ? pp.final[0] : [null, null];
+  const ex = p.extras || {};
+  html += `<div class="titulo-resumen" style="margin:0 0 16px">
+    <div class="titulo-item"><div class="lbl-mini">🥇 Campeón</div><div class="val-mini">${esc(camp)}</div></div>
+    <div class="titulo-item"><div class="lbl-mini">🥈 Subcampeón</div><div class="val-mini">${esc(sub || '—')}</div></div>
+    <div class="titulo-item"><div class="lbl-mini">🥉 Tercero</div><div class="val-mini">${esc(ter)}</div></div>
+    <div class="titulo-item"><div class="lbl-mini">4.º</div><div class="val-mini">${esc(cua || '—')}</div></div>
+    <div class="titulo-item"><div class="lbl-mini">🥅 Final</div><div class="val-mini">${fin[0] ? esc(fin[0]) + ' ' + p.finalScore.g1 + '–' + p.finalScore.g2 + ' ' + esc(fin[1]) : '—'}</div></div>
+    <div class="titulo-item"><div class="lbl-mini">⚽ Goleador</div><div class="val-mini">${esc(ex.goleador || '—')}</div></div>
+    <div class="titulo-item"><div class="lbl-mini">🎽 Portero</div><div class="val-mini">${esc(ex.portero || '—')}</div></div>
+    <div class="titulo-item"><div class="lbl-mini">🌟 MVP</div><div class="val-mini">${esc(ex.mvp || '—')}</div></div>
+    <div class="titulo-item"><div class="lbl-mini">🎪 Sorpresa</div><div class="val-mini">${esc(ex.sorpresa || 'Ninguno')}</div></div>
+    <div class="titulo-item"><div class="lbl-mini">👑 Goles torneo</div><div class="val-mini">${ex.golesTorneo ?? '—'}</div></div>
+  </div>`;
+
+  // ── Cuadro de eliminatorias ──
+  if (pp) {
+    html += `<div class="subtitle" style="margin-top:4px">⚔️ Su cuadro de eliminatorias</div>`;
+    for (const r of ROUNDS) {
+      const picks = [];
+      for (let i = 0; i < r.n; i++) {
+        const win = p.winners[r.key + '-' + i];
+        if (!win) continue;
+        const realWin = resultados.winners[r.key + '-' + i];
+        const estado = realWin ? (realWin === win ? ' hit' : '') : '';
+        picks.push(`<span class="pred-tag${estado}">${esc(win)}</span>`);
+      }
+      html += `<div class="nota" style="margin-bottom:2px">${NOMBRE_RONDA[r.key]} — avanzan:</div><div class="detalle-ronda">${picks.join('') || '—'}</div>`;
+    }
+    const tHit = resultados.winners['tercer'] && resultados.winners['tercer'] === ter ? ' hit' : '';
+    const cHit = resultados.winners['final'] && resultados.winners['final'] === camp ? ' hit' : '';
+    html += `<div class="detalle-ronda"><span class="pred-tag${cHit}">🏆 Campeón: ${esc(camp)}</span><span class="pred-tag${tHit}">🥉 3.er puesto: ${esc(ter)}</span></div>`;
+  }
+
+  // ── 72 partidos de grupos ──
+  html += `<div class="subtitle">⚽ Sus 72 marcadores de la fase de grupos</div>
+    <p class="nota" style="margin-bottom:10px">✅ exacto (+${PTS.grupoExacto}) · 🟡 signo (+${PTS.grupoGanador}) · ❌ fallo · ⏳ sin jugar</p>`;
+  for (const L of LETRAS) {
+    html += `<details class="grupo-card"><summary>Grupo ${L}</summary><div class="grupo-body">`;
+    const orden = PAIRS.map((_, i) => i).sort((a, b) => ((CALENDARIO[L + a] || {}).ts || a) - ((CALENDARIO[L + b] || {}).ts || b));
+    for (const i of orden) {
+      const id2 = L + i, pair = PAIRS[i];
+      const pr = p.scores[id2], re = resultados.scores[id2];
+      const cal = CALENDARIO[id2] || {};
+      let icono = '⏳', realTxt = '';
+      if (pr && re && re[0] != null && re[1] != null) {
+        realTxt = `real ${re[0]}–${re[1]}`;
+        if (pr[0] === re[0] && pr[1] === re[1]) icono = '✅';
+        else if (Math.sign(pr[0] - pr[1]) === Math.sign(re[0] - re[1])) icono = '🟡';
+        else icono = '❌';
+      }
+      html += `<div class="detalle-partido">
+        <span class="dp-fecha">${cal.f || ''} ${cal.h || ''}</span>
+        <span>${GRUPOS[L][pair[0]]} <strong style="color:var(--dorado-claro)">${pr ? pr[0] + '–' + pr[1] : '—'}</strong> ${GRUPOS[L][pair[1]]}</span>
+        <span class="dp-real">${realTxt}</span>
+        <span class="detalle-hit">${icono}</span>
+      </div>`;
+    }
+    html += `</div></details>`;
+  }
+
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function cerrarModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
 
 // ═════════════════ UI GENERAL ═════════════════
 function actualizarEstadisticas() {
