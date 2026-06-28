@@ -265,7 +265,7 @@
 
     <div class="card">
       <div class="card-title">⚔️ 3 · Eliminatorias — tu cuadro</div>
-      <p class="nota" style="margin-bottom:12px">El cuadro se genera automáticamente con tus clasificados. Pulsa sobre el equipo que crees que ganará cada cruce para avanzarlo.</p>
+      <p class="nota" style="margin-bottom:12px">El cuadro se genera automáticamente con tus clasificados. Pulsa sobre el equipo que crees que ganará cada cruce para avanzarlo. Para desmarcar, vuelve a pulsar el equipo ya seleccionado.</p>
       <div id="pred-bracket"></div>
     </div>
 
@@ -341,7 +341,7 @@
       </div>
       <div class="card">
         <div class="card-title">⚔️ Resultados reales — eliminatorias</div>
-        <p class="nota" style="margin-bottom:12px">Cuando los 72 partidos estén completos, el cuadro real se genera solo. Pulsa sobre el equipo que realmente avanzó en cada cruce.</p>
+        <p class="nota" style="margin-bottom:12px">Cuando los 72 partidos estén completos, el cuadro real se genera solo. Pulsa sobre el equipo que realmente avanzó en cada cruce. Para desmarcar, vuelve a pulsar el equipo ya seleccionado.</p>
         <div id="res-bracket"></div>
       </div>
       <div class="card">
@@ -682,9 +682,13 @@ function renderBracket(containerId, ctx) {
 
 function pickWinner(ctx, key, team) {
   const state = ctx === 'pred' ? predState : resultados;
-  state.winners[key] = team;
+  if (state.winners[key] === team) {
+    delete state.winners[key];   // pulsar el equipo ya seleccionado → desmarcar
+  } else {
+    state.winners[key] = team;
+  }
   const r32 = buildR32(state.scores);
-  sanitizeWinners(r32, state.winners);
+  sanitizeWinners(r32, state.winners);   // limpia en cascada las rondas siguientes que dependían de este ganador
   renderBracket(ctx === 'pred' ? 'pred-bracket' : 'res-bracket', ctx);
   if (ctx === 'res') { guardarResultados(); recalcularTodo(); }
 }
