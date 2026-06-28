@@ -150,6 +150,13 @@
   .pago-badge.no { background:rgba(255,255,255,.06); color:var(--texto-muted); border:1px solid var(--gris); }
   .pago-toggle { display:flex; align-items:center; gap:6px; font-size:12px; color:#ccc; cursor:pointer; user-select:none; }
   .pago-toggle input { width:auto; accent-color:var(--success); cursor:pointer; }
+  .participant-card-mini details { margin:0; }
+  .participant-card-mini summary { cursor:pointer; display:flex; align-items:center; gap:10px; padding:0; list-style:none; user-select:none; }
+  .participant-card-mini summary::-webkit-details-marker { display:none; }
+  .participant-card-mini summary .expand-icon { display:inline-block; transition:transform .2s; font-size:12px; color:var(--dorado-claro); }
+  .participant-card-mini details[open] summary .expand-icon { transform:rotate(90deg); }
+  .participant-extras { padding-top:8px; padding-left:22px; border-left:2px solid var(--dorado-claro); margin:8px 0 2px 5px; }
+  .extra-item { font-size:12px; margin:4px 0; color:var(--texto); }
   .nombre-link { cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; }
   .nombre-link:hover { color:var(--dorado-claro); }
   .detalle-partido { display:grid; grid-template-columns:auto 1fr auto auto; gap:8px; font-size:12.5px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.05); align-items:center; }
@@ -838,14 +845,22 @@ function renderParticipantes() {
   el.innerHTML = `<p class="nota" style="margin-bottom:10px">💰 Cuotas pagadas: <strong style="color:${pagadas === participantes.length ? 'var(--success)' : 'var(--dorado-claro)'}">${pagadas}/${participantes.length}</strong></p>` + participantes.map(p => {
     const r32 = buildR32(p.scores), pp = r32 ? propagate(r32, p.winners) : null;
     const camp = p.winners['final'] || '—';
-    return `<div class="participant-card-mini">
-      <div><div style="font-weight:600" class="nombre-link" onclick="verApuesta('${String(p.id)}')">${esc(p.nombre)} 🔍</div>
-        <span class="pago-badge ${p.pagado ? 'si' : 'no'}">${p.pagado ? '💰 Cuota pagada' : '⏳ Cuota pendiente'}</span></div>
-      <div>
-        <span class="pred-tag ${resultados.winners['final'] && camp === resultados.winners['final'] ? 'hit' : ''}">🥇 ${esc(camp)}</span>
-        <span class="pred-tag">⚽ ${esc(p.extras.goleador || '—')}</span>
-        <span class="pred-tag">🥅 Final: ${pp && pp.final[0][0] ? esc(pp.final[0][0]) + ' ' + p.finalScore.g1 + '-' + p.finalScore.g2 + ' ' + esc(pp.final[0][1]) : '—'}</span>
-      </div>
+    const fin = pp && pp.final[0][0] ? esc(pp.final[0][0]) + ' ' + p.finalScore.g1 + '–' + p.finalScore.g2 + ' ' + esc(pp.final[0][1]) : '—';
+    return `<div class="participant-card-mini" style="display:block">
+      <details>
+        <summary>
+          <span class="expand-icon">▶</span>
+          <div style="flex:1">
+            <span style="font-weight:600" class="nombre-link" onclick="event.stopPropagation(); event.preventDefault(); verApuesta('${String(p.id)}')">${esc(p.nombre)} 🔍</span>
+          </div>
+          <span class="pago-badge ${p.pagado ? 'si' : 'no'}" style="margin-top:0">${p.pagado ? '💰 Pagada' : '⏳ Pendiente'}</span>
+        </summary>
+        <div class="participant-extras">
+          <div class="extra-item">🥇 Campeón: <strong>${esc(camp)}</strong></div>
+          <div class="extra-item">⚽ Goleador: <strong>${esc(p.extras.goleador || '—')}</strong></div>
+          <div class="extra-item" style="color:var(--dorado-claro)">🥅 Final: <strong>${fin}</strong></div>
+        </div>
+      </details>
     </div>`;
   }).join('');
 }
@@ -1043,7 +1058,7 @@ async function togglePago(id, pagado, checkbox) {
     renderClasificacion();
     showMsg('admin-msg', 'success', `✅ Cuota de ${p.nombre}: ${pagado ? 'PAGADA 💰' : 'pendiente ⏳'}.`);
   } catch (e) {
-    if (checkbox) checkbox.checked = !pagado;   // revertir el tic si falla
+    if (checkbox) checkbox.checked = !pagado;
     showMsg('admin-msg', 'error', '❌ No se pudo actualizar el pago: ' + e.message + '. ¿Has ejecutado el SQL de control de pago en Supabase?');
   }
 }
@@ -1331,6 +1346,101 @@ async function initBackup() {
   } catch (e) {}
 }
 
+// ═════════════════ COPIA AUTOMÁTICA PROGRAMADA ═════════════════
+function configAutoBackup() {
+  return store.get('autoBackup', { on: false, horas: ['14:00', '17:00'], hechas: {} });
+}
+
+function guardarConfigAutoBackup() {
+  const cfg = configAutoBackup();
+  cfg.on = document.getElementById('auto-backup-on').checked;
+  const horas = document.getElementById('auto-backup-horas').value
+    .split(',').map(s => s.trim()).filter(s => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s));
+  if (horas.length) cfg.horas = horas;
+  store.set('autoBackup', cfg);
+  pintarEstadoAutoBackup();
+}
+
+function pintarEstadoAutoBackup() {
+  const cfg = configAutoBackup();
+  const el = document.getElementById('auto-backup-estado');
+  if (!el) return;
+  if (!cfg.on) { el.textContent = 'Desactivada.'; return; }
+  const hoy = new Date().toISOString().slice(0, 10);
+  const pendientes = cfg.horas.filter(h => cfg.hechas[h] !== hoy);
+  el.textContent = `Activa: ${cfg.horas.join(', ')} · Hoy ${cfg.horas.length - pendientes.length}/${cfg.horas.length} hechas.`;
+}
+
+async function comprobarBackupAuto() {
+  const cfg = configAutoBackup();
+  if (!cfg.on) return;
+  const ahora = new Date();
+  const hoy = ahora.toISOString().slice(0, 10);
+  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  for (const h of cfg.horas) {
+    const [hh, mm] = h.split(':').map(Number);
+    if (minutosAhora >= hh * 60 + mm && cfg.hechas[h] !== hoy) {
+      const ok = await hacerBackup('auto');
+      if (ok) {
+        cfg.hechas[h] = hoy;
+        store.set('autoBackup', cfg);
+        showMsg('backup-msg', 'success', `⏰ Copia automática de las ${h} realizada (${new Date().toLocaleTimeString('es-ES')}).`);
+      }
+    }
+  }
+  pintarEstadoAutoBackup();
+}
+setInterval(comprobarBackupAuto, 60000);
+
+// ═════════════════ BACKUPS EN SERVIDOR (horario configurable) ═════════════════
+async function guardarHorarioServidor() {
+  if (!nubeActiva()) return showMsg('servidor-msg', 'error', '❌ Necesitas la nube activa para esto.');
+  const horas = document.getElementById('servidor-horas').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+  if (!horas.length || !horas.every(h => /^([01]?\d|2[0-3]):[0-5]\d$/.test(h)))
+    return showMsg('servidor-msg', 'error', '⚠️ Formato de horas no válido. Ejemplo: 14:00, 17:00');
+  try {
+    const creados = await sbFetch('/rest/v1/rpc/programar_backups', {
+      method: 'POST',
+      body: JSON.stringify({ p_horas: horas, p_clave: adminClave })
+    });
+    showMsg('servidor-msg', 'success', '✅ Horario guardado en el servidor: ' + creados.join(' · '));
+    cargarEstadoServidor();
+  } catch (e) {
+    showMsg('servidor-msg', 'error', '❌ No se pudo programar: ' + e.message +
+      (e.message.includes('does not exist') ? ' — ¿Has ejecutado el SQL "horario-backup-desde-web" en Supabase?' : ''));
+  }
+}
+
+async function cargarEstadoServidor() {
+  if (!nubeActiva() || !adminClave) return;
+  const el = document.getElementById('servidor-estado');
+  try {
+    const [horarios, snaps] = await Promise.all([
+      sbFetch('/rest/v1/rpc/ver_horarios_backup', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) }),
+      sbFetch('/rest/v1/rpc/listar_backups', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) })
+    ]);
+    const horasES = (horarios || []).map(h => {
+      const m = h.programacion_utc.match(/^(\d{1,2}) (\d{1,2}) /);
+      if (!m) return h.programacion_utc;
+      return String((+m[2] + 2) % 24).padStart(2, '0') + ':' + String(+m[1]).padStart(2, '0');
+    }).sort();
+    if (document.getElementById('servidor-horas') && !document.getElementById('servidor-horas').value && horasES.length)
+      document.getElementById('servidor-horas').value = horasES.join(', ');
+    const listaSnaps = (snaps || []).map(s =>
+      `<div class="detalle-partido" style="grid-template-columns:auto 1fr auto">
+        <span class="dp-fecha">#${s.id}</span>
+        <span>${new Date(s.creado).toLocaleString('es-ES')}</span>
+        <span class="dp-real">${s.tamano_kb} KB</span>
+      </div>`).join('');
+    el.innerHTML = `<strong style="color:var(--dorado-claro)">Horario activo (hora española):</strong> ${horasES.join(', ') || 'ninguno'}<br>
+      <strong style="color:var(--dorado-claro)">Últimos snapshots en servidor:</strong>
+      ${listaSnaps || '<div class="nota">Todavía no hay snapshots.</div>'}`;
+  } catch (e) {
+    el.innerHTML = '<span style="color:var(--error)">No se pudo consultar el servidor: ' + esc(e.message) + '</span>';
+  }
+}
+
 // ═════════════════ DETALLE DE APUESTA (modal) ═════════════════
 const NOMBRE_RONDA = { d16: 'Dieciseisavos', o8: 'Octavos', c4: 'Cuartos', sf: 'Semifinales' };
 
@@ -1344,7 +1454,6 @@ function verApuesta(id) {
   let html = `<div class="card-title" style="margin-bottom:4px">📋 Apuesta de ${esc(p.nombre)}</div>
     <p class="nota" style="margin-bottom:14px">Puntos actuales: <strong style="color:var(--dorado)">${p.puntos || 0}</strong> · <span class="pago-badge ${p.pagado ? 'si' : 'no'}" style="margin:0">${p.pagado ? '💰 Cuota pagada' : '⏳ Cuota pendiente'}</span> · Las apuestas son inmutables una vez registradas.</p>`;
 
-  // ── Títulos y extras ──
   const camp = p.winners['final'] || '—';
   const sub = pp && pp.final[0][0] && pp.final[0][1] ? loserOf(pp.final[0], camp) : '—';
   const ter = p.winners['tercer'] || '—';
@@ -1364,26 +1473,82 @@ function verApuesta(id) {
     <div class="titulo-item"><div class="lbl-mini">👑 Goles torneo</div><div class="val-mini">${ex.golesTorneo ?? '—'}</div></div>
   </div>`;
 
-  // ── Cuadro de eliminatorias ──
   if (pp) {
-    html += `<div class="subtitle" style="margin-top:4px">⚔️ Su cuadro de eliminatorias</div>`;
+    const realR32ko = buildR32(resultados.scores);
+    const prko = realR32ko ? propagate(realR32ko, resultados.winners) : null;
+    const koTeam = (t, w) => t === w ? `<strong style="color:var(--dorado-claro)">${esc(t)}</strong>` : esc(t);
+    html += `<div class="subtitle" style="margin-top:4px">⚔️ Su cuadro de eliminatorias</div>
+      <p class="nota" style="margin-bottom:10px">✅ cruce exacto: 2 equipos + ganador (+${PTS.koExacto}) · 🟡 solo el ganador (+${PTS.koGanador}) · ❌ fallo · ⏳ sin jugar</p>`;
+    // Cruces de dieciseisavos a semifinales (+8 / +3)
     for (const r of ROUNDS) {
-      const picks = [];
+      const filas = [];
       for (let i = 0; i < r.n; i++) {
-        const win = p.winners[r.key + '-' + i];
-        if (!win) continue;
-        const realWin = resultados.winners[r.key + '-' + i];
-        const estado = realWin ? (realWin === win ? ' hit' : '') : '';
-        picks.push(`<span class="pred-tag${estado}">${esc(win)}</span>`);
+        const pair = pp[r.key][i];
+        const pw = p.winners[r.key + '-' + i];
+        if (!pair || !pair[0] || !pair[1] || !pw) continue;
+        const rw = resultados.winners[r.key + '-' + i];
+        let icono = '⏳', ptsN = 0;
+        if (rw && prko) {
+          if (pw === rw) {
+            const mismoCruce = pp[r.key][i].every(t => t && prko[r.key][i].includes(t));
+            if (mismoCruce) { icono = '✅'; ptsN = PTS.koExacto; }
+            else { icono = '🟡'; ptsN = PTS.koGanador; }
+          } else { icono = '❌'; }
+        }
+        filas.push(`<div class="detalle-partido" style="grid-template-columns:1fr auto auto">
+          <span>${koTeam(pair[0], pw)} <span style="color:var(--texto-muted)">vs</span> ${koTeam(pair[1], pw)}</span>
+          <span class="dp-real">${ptsN ? '+' + ptsN + ' pts' : ''}</span>
+          <span class="detalle-hit">${icono}</span>
+        </div>`);
       }
-      html += `<div class="nota" style="margin-bottom:2px">${NOMBRE_RONDA[r.key]} — avanzan:</div><div class="detalle-ronda">${picks.join('') || '—'}</div>`;
+      if (filas.length) html += `<div class="nota" style="margin:10px 0 2px; color:var(--dorado-claro); font-weight:600">${NOMBRE_RONDA[r.key]}</div>` + filas.join('');
     }
-    const tHit = resultados.winners['tercer'] && resultados.winners['tercer'] === ter ? ' hit' : '';
-    const cHit = resultados.winners['final'] && resultados.winners['final'] === camp ? ' hit' : '';
-    html += `<div class="detalle-ronda"><span class="pred-tag${cHit}">🏆 Campeón: ${esc(camp)}</span><span class="pred-tag${tHit}">🥉 3.er puesto: ${esc(ter)}</span></div>`;
+    // Gran final: campeón (+${PTS.campeon}) + subcampeón (+${PTS.sub}) + resultado exacto (+${PTS.finalExacta})
+    const finalPair = pp.final[0];
+    if (finalPair && finalPair[0] && finalPair[1] && camp && camp !== '—') {
+      const realCamp = prko ? resultados.winners['final'] : null;
+      const predSub = loserOf(finalPair, camp);
+      const realSub = (prko && realCamp) ? loserOf(prko.final[0], realCamp) : null;
+      const campOk = !!(realCamp && realCamp === camp);
+      const subOk = !!(predSub && realSub && predSub === realSub);
+      const pf = finalPair, rf = prko ? prko.final[0] : [null, null];
+      const ps = p.finalScore, rs = resultados.finalScore;
+      let finalExactaOk = false;
+      if (prko && pf[0] && pf[1] && rf[0] && rf[1] && ps && rs && ps.g1 != null && rs.g1 != null && ps.g2 != null && rs.g2 != null) {
+        finalExactaOk = (pf[0] === rf[0] && pf[1] === rf[1] && ps.g1 === rs.g1 && ps.g2 === rs.g2) ||
+                        (pf[0] === rf[1] && pf[1] === rf[0] && ps.g1 === rs.g2 && ps.g2 === rs.g1);
+      }
+      const ptsFinal = (campOk ? PTS.campeon : 0) + (subOk ? PTS.sub : 0) + (finalExactaOk ? PTS.finalExacta : 0);
+      const det = [campOk ? 'campeón' : '', subOk ? 'subcampeón' : '', finalExactaOk ? 'resultado exacto' : ''].filter(Boolean).join(' + ');
+      const icono = (prko && realCamp) ? (campOk ? '✅' : '❌') : '⏳';
+      const marc = (ps && ps.g1 != null && ps.g2 != null) ? ` <strong style="color:var(--dorado-claro)">${ps.g1}–${ps.g2}</strong> ` : ` <span style="color:var(--texto-muted)">vs</span> `;
+      html += `<div class="nota" style="margin:10px 0 2px; color:var(--dorado-claro); font-weight:600">🏆 Gran final</div>
+        <div class="detalle-partido" style="grid-template-columns:1fr auto auto">
+          <span>${koTeam(finalPair[0], camp)}${marc}${koTeam(finalPair[1], camp)}</span>
+          <span class="dp-real">${ptsFinal ? '+' + ptsFinal + ' pts' + (det ? ' · ' + det : '') : ''}</span>
+          <span class="detalle-hit">${icono}</span>
+        </div>`;
+    }
+    // Partido por el 3.er puesto: 3.º (+${PTS.tercero}) + 4.º (+${PTS.cuarto})
+    const terPair = pp.tercer[0];
+    if (terPair && terPair[0] && terPair[1] && ter && ter !== '—') {
+      const realTer = prko ? resultados.winners['tercer'] : null;
+      const predCua = loserOf(terPair, ter);
+      const realCua = (prko && realTer) ? loserOf(prko.tercer[0], realTer) : null;
+      const terOk = !!(realTer && realTer === ter);
+      const cuaOk = !!(predCua && realCua && predCua === realCua);
+      const ptsTer = (terOk ? PTS.tercero : 0) + (cuaOk ? PTS.cuarto : 0);
+      const det = [terOk ? '3.º' : '', cuaOk ? '4.º' : ''].filter(Boolean).join(' + ');
+      const icono = (prko && realTer) ? (terOk ? '✅' : '❌') : '⏳';
+      html += `<div class="nota" style="margin:10px 0 2px; color:var(--dorado-claro); font-weight:600">🥉 Partido por el 3.er puesto</div>
+        <div class="detalle-partido" style="grid-template-columns:1fr auto auto">
+          <span>${koTeam(terPair[0], ter)} <span style="color:var(--texto-muted)">vs</span> ${koTeam(terPair[1], ter)}</span>
+          <span class="dp-real">${ptsTer ? '+' + ptsTer + ' pts' + (det ? ' · ' + det : '') : ''}</span>
+          <span class="detalle-hit">${icono}</span>
+        </div>`;
+    }
   }
 
-  // ── 72 partidos de grupos ──
   html += `<div class="subtitle">⚽ Sus 72 marcadores de la fase de grupos</div>
     <p class="nota" style="margin-bottom:10px">✅ exacto (+${PTS.grupoExacto}) · 🟡 signo (+${PTS.grupoGanador}) · ❌ fallo · ⏳ sin jugar</p>`;
   for (const L of LETRAS) {
@@ -1420,104 +1585,6 @@ function cerrarModal() {
   document.body.style.overflow = '';
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
-
-// ═════════════════ COPIA AUTOMÁTICA PROGRAMADA ═════════════════
-// Config en localStorage: { on: bool, horas: ['14:00','17:00'], hechas: { '14:00': ' 2026-06-10', ... } }
-function configAutoBackup() {
-  return store.get('autoBackup', { on: false, horas: ['14:00', '17:00'], hechas: {} });
-}
-
-function guardarConfigAutoBackup() {
-  const cfg = configAutoBackup();
-  cfg.on = document.getElementById('auto-backup-on').checked;
-  const horas = document.getElementById('auto-backup-horas').value
-    .split(',').map(s => s.trim()).filter(s => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s));
-  if (horas.length) cfg.horas = horas;
-  store.set('autoBackup', cfg);
-  pintarEstadoAutoBackup();
-}
-
-function pintarEstadoAutoBackup() {
-  const cfg = configAutoBackup();
-  const el = document.getElementById('auto-backup-estado');
-  if (!el) return;
-  if (!cfg.on) { el.textContent = 'Desactivada.'; return; }
-  const ahora = new Date();
-  const hoy = ahora.toISOString().slice(0, 10);
-  const pendientes = cfg.horas.filter(h => cfg.hechas[h] !== hoy);
-  el.textContent = `Activa: ${cfg.horas.join(', ')} · Hoy ${cfg.horas.length - pendientes.length}/${cfg.horas.length} hechas.`;
-}
-
-async function comprobarBackupAuto() {
-  const cfg = configAutoBackup();
-  if (!cfg.on) return;
-  const ahora = new Date();
-  const hoy = ahora.toISOString().slice(0, 10);
-  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
-  for (const h of cfg.horas) {
-    const [hh, mm] = h.split(':').map(Number);
-    if (minutosAhora >= hh * 60 + mm && cfg.hechas[h] !== hoy) {
-      const ok = await hacerBackup('auto');
-      if (ok) {
-        cfg.hechas[h] = hoy;
-        store.set('autoBackup', cfg);
-        showMsg('backup-msg', 'success', `⏰ Copia automática de las ${h} realizada (${new Date().toLocaleTimeString('es-ES')}).`);
-      }
-    }
-  }
-  pintarEstadoAutoBackup();
-}
-setInterval(comprobarBackupAuto, 60000);   // comprobar cada minuto
-
-// ═════════════════ BACKUPS EN SERVIDOR (horario configurable) ═════════════════
-async function guardarHorarioServidor() {
-  if (!nubeActiva()) return showMsg('servidor-msg', 'error', '❌ Necesitas la nube activa para esto.');
-  const horas = document.getElementById('servidor-horas').value
-    .split(',').map(s => s.trim()).filter(Boolean);
-  if (!horas.length || !horas.every(h => /^([01]?\d|2[0-3]):[0-5]\d$/.test(h)))
-    return showMsg('servidor-msg', 'error', '⚠️ Formato de horas no válido. Ejemplo: 14:00, 17:00');
-  try {
-    const creados = await sbFetch('/rest/v1/rpc/programar_backups', {
-      method: 'POST',
-      body: JSON.stringify({ p_horas: horas, p_clave: adminClave })
-    });
-    showMsg('servidor-msg', 'success', '✅ Horario guardado en el servidor: ' + creados.join(' · '));
-    cargarEstadoServidor();
-  } catch (e) {
-    showMsg('servidor-msg', 'error', '❌ No se pudo programar: ' + e.message +
-      (e.message.includes('does not exist') ? ' — ¿Has ejecutado el SQL "horario-backup-desde-web" en Supabase?' : ''));
-  }
-}
-
-async function cargarEstadoServidor() {
-  if (!nubeActiva() || !adminClave) return;
-  const el = document.getElementById('servidor-estado');
-  try {
-    const [horarios, snaps] = await Promise.all([
-      sbFetch('/rest/v1/rpc/ver_horarios_backup', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) }),
-      sbFetch('/rest/v1/rpc/listar_backups', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) })
-    ]);
-    // De la programación cron UTC ('mm hh * * *') a hora española (+2)
-    const horasES = (horarios || []).map(h => {
-      const m = h.programacion_utc.match(/^(\d{1,2}) (\d{1,2}) /);
-      if (!m) return h.programacion_utc;
-      return String((+m[2] + 2) % 24).padStart(2, '0') + ':' + String(+m[1]).padStart(2, '0');
-    }).sort();
-    if (document.getElementById('servidor-horas') && !document.getElementById('servidor-horas').value && horasES.length)
-      document.getElementById('servidor-horas').value = horasES.join(', ');
-    const listaSnaps = (snaps || []).map(s =>
-      `<div class="detalle-partido" style="grid-template-columns:auto 1fr auto">
-        <span class="dp-fecha">#${s.id}</span>
-        <span>${new Date(s.creado).toLocaleString('es-ES')}</span>
-        <span class="dp-real">${s.tamano_kb} KB</span>
-      </div>`).join('');
-    el.innerHTML = `<strong style="color:var(--dorado-claro)">Horario activo (hora española):</strong> ${horasES.join(', ') || 'ninguno'}<br>
-      <strong style="color:var(--dorado-claro)">Últimos snapshots en servidor:</strong>
-      ${listaSnaps || '<div class="nota">Todavía no hay snapshots.</div>'}`;
-  } catch (e) {
-    el.innerHTML = '<span style="color:var(--error)">No se pudo consultar el servidor: ' + esc(e.message) + '</span>';
-  }
-}
 
 // ═════════════════ UI GENERAL ═════════════════
 function actualizarEstadisticas() {
@@ -1558,7 +1625,7 @@ window.addEventListener('scroll', () => document.getElementById('fab').classList
   recalcularTodo();
   initBackup();
   cargarNube();
-  setTimeout(comprobarBackupAuto, 4000);   // catch-up: copia pendiente del día al abrir
+  setTimeout(comprobarBackupAuto, 4000);
 })();
 </script>
 </body>
