@@ -150,6 +150,13 @@
   .pago-badge.no { background:rgba(255,255,255,.06); color:var(--texto-muted); border:1px solid var(--gris); }
   .pago-toggle { display:flex; align-items:center; gap:6px; font-size:12px; color:#ccc; cursor:pointer; user-select:none; }
   .pago-toggle input { width:auto; accent-color:var(--success); cursor:pointer; }
+  .participant-card-mini details { margin:0; }
+  .participant-card-mini summary { cursor:pointer; display:flex; align-items:center; gap:10px; padding:0; list-style:none; user-select:none; }
+  .participant-card-mini summary::-webkit-details-marker { display:none; }
+  .participant-card-mini summary .expand-icon { display:inline-block; transition:transform .2s; font-size:12px; color:var(--dorado-claro); }
+  .participant-card-mini details[open] summary .expand-icon { transform:rotate(90deg); }
+  .participant-extras { padding-top:8px; padding-left:22px; border-left:2px solid var(--dorado-claro); margin:8px 0 2px 5px; }
+  .extra-item { font-size:12px; margin:4px 0; color:var(--texto); }
   .nombre-link { cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; }
   .nombre-link:hover { color:var(--dorado-claro); }
   .detalle-partido { display:grid; grid-template-columns:auto 1fr auto auto; gap:8px; font-size:12.5px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.05); align-items:center; }
@@ -212,8 +219,7 @@
         <tbody>
           <tr><td>⚽ Fase de grupos — acertar ganador o empate</td><td><span class="puntos-badge">+2 pts</span></td><td>72 partidos, signo 1X2 correcto</td></tr>
           <tr><td>🎯 Fase de grupos — resultado exacto</td><td><span class="puntos-badge gold">+5 pts</span></td><td>Marcador exacto (sustituye al +2)</td></tr>
-          <tr><td>⚔️ Eliminatorias — acertar quién avanza</td><td><span class="puntos-badge">+3 pts</span></td><td>Dieciseisavos a semifinales (30 cruces)</td></tr>
-          <tr><td>💥 Eliminatorias — cruce exacto</td><td><span class="puntos-badge gold">+8 pts</span></td><td>Aciertas los dos equipos del cruce y el ganador (sustituye al +3)</td></tr>
+          <tr><td>⚔️ Eliminatorias — equipos que pasan de ronda</td><td><span class="puntos-badge">+3 pts</span></td><td>Por cada país que aciertes que llega a octavos, cuartos, semis y final</td></tr>
           <tr><td>🥇 Campeón del Mundo</td><td><span class="puntos-badge gold">+25 pts</span></td><td>Se deriva de tu cuadro</td></tr>
           <tr><td>🥈 Subcampeón</td><td><span class="puntos-badge">+15 pts</span></td><td>El perdedor de tu final</td></tr>
           <tr><td>🥉 3.º y 4.º puesto</td><td><span class="puntos-badge">+10 pts c/u</span></td><td>Partido por el tercer puesto de tu cuadro</td></tr>
@@ -258,7 +264,7 @@
 
     <div class="card">
       <div class="card-title">⚔️ 3 · Eliminatorias — tu cuadro</div>
-      <p class="nota" style="margin-bottom:12px">El cuadro se genera automáticamente con tus clasificados. Pulsa sobre el equipo que crees que ganará cada cruce para avanzarlo.</p>
+      <p class="nota" style="margin-bottom:12px">El cuadro se genera automáticamente con tus clasificados. Pulsa sobre el equipo que crees que ganará cada cruce para avanzarlo. Para desmarcar, vuelve a pulsar el equipo ya seleccionado.</p>
       <div id="pred-bracket"></div>
     </div>
 
@@ -334,7 +340,7 @@
       </div>
       <div class="card">
         <div class="card-title">⚔️ Resultados reales — eliminatorias</div>
-        <p class="nota" style="margin-bottom:12px">Cuando los 72 partidos estén completos, el cuadro real se genera solo. Pulsa sobre el equipo que realmente avanzó en cada cruce.</p>
+        <p class="nota" style="margin-bottom:12px">Cuando los 72 partidos estén completos, el cuadro real se genera solo. Pulsa sobre el equipo que realmente avanzó en cada cruce. Para desmarcar, vuelve a pulsar el equipo ya seleccionado.</p>
         <div id="res-bracket"></div>
       </div>
       <div class="card">
@@ -466,11 +472,17 @@ const CALENDARIO = {"A2":{"f":"jue 11 jun","h":"21:00","ts":1781204400000},"A3":
 // Equipos no europeos ni sudamericanos (para "país sorpresa")
 const NO_EUR_SUD = ['México 🇲🇽','Corea del Sur 🇰🇷','Sudáfrica 🇿🇦','Canadá 🇨🇦','Catar 🇶🇦','Haití 🇭🇹','Estados Unidos 🇺🇸','Australia 🇦🇺','Costa de Marfil 🇨🇮','Curazao 🇨🇼','Japón 🇯🇵','Túnez 🇹🇳','Irán 🇮🇷','Egipto 🇪🇬','Nueva Zelanda 🇳🇿','Arabia Saudí 🇸🇦','Cabo Verde 🇨🇻','Senegal 🇸🇳','Irak 🇮🇶','Argelia 🇩🇿','Jordania 🇯🇴','Uzbekistán 🇺🇿','RD Congo 🇨🇩','Panamá 🇵🇦','Ghana 🇬🇭','Marruecos 🇲🇦'];
 // Plantilla de dieciseisavos: 1.º A-H vs mejores terceros (T1 = mejor 3.º), resto de 1.º vs 2.º, y 2.º entre sí
-const R32_TEMPLATE = [
-  ['1A','T8'],['1B','T7'],['1C','T6'],['1D','T5'],
-  ['1E','T4'],['1F','T3'],['1G','T2'],['1H','T1'],
-  ['1I','2A'],['1J','2B'],['1K','2C'],['1L','2D'],
-  ['2E','2F'],['2G','2H'],['2I','2J'],['2K','2L']
+// Asignación oficial de terceros (Anexo C, reglamento FIFA 2026): 495 combinaciones.
+// Clave = 8 grupos cuyos terceros clasifican (orden alfabético).
+// Valor = grupo del tercero asignado a cada primero, en orden [1A,1B,1D,1E,1G,1I,1K,1L].
+const TERCEROS_ANEXO_C = {"EFGHIJKL":"EJIFHGLK","DFGHIJKL":"HGIDJFLK","DEGHIJKL":"EJIDHGLK","DEFHIJKL":"EJIDHFLK","DEFGIJKL":"EGIDJFLK","DEFGHJKL":"EGJDHFLK","DEFGHIKL":"EGIDHFLK","DEFGHIJL":"EGJDHFLI","DEFGHIJK":"EGJDHFIK","CFGHIJKL":"HGICJFLK","CEGHIJKL":"EJICHGLK","CEFHIJKL":"EJICHFLK","CEFGIJKL":"EGICJFLK","CEFGHJKL":"EGJCHFLK","CEFGHIKL":"EGICHFLK","CEFGHIJL":"EGJCHFLI","CEFGHIJK":"EGJCHFIK","CDGHIJKL":"HGICJDLK","CDFHIJKL":"CJIDHFLK","CDFGIJKL":"CGIDJFLK","CDFGHJKL":"CGJDHFLK","CDFGHIKL":"CGIDHFLK","CDFGHIJL":"CGJDHFLI","CDFGHIJK":"CGJDHFIK","CDEHIJKL":"EJICHDLK","CDEGIJKL":"EGICJDLK","CDEGHJKL":"EGJCHDLK","CDEGHIKL":"EGICHDLK","CDEGHIJL":"EGJCHDLI","CDEGHIJK":"EGJCHDIK","CDEFIJKL":"CJEDIFLK","CDEFHJKL":"CJEDHFLK","CDEFHIKL":"CEIDHFLK","CDEFHIJL":"CJEDHFLI","CDEFHIJK":"CJEDHFIK","CDEFGJKL":"CGEDJFLK","CDEFGIKL":"CGEDIFLK","CDEFGIJL":"CGEDJFLI","CDEFGIJK":"CGEDJFIK","CDEFGHKL":"CGEDHFLK","CDEFGHJL":"CGJDHFLE","CDEFGHJK":"CGJDHFEK","CDEFGHIL":"CGEDHFLI","CDEFGHIK":"CGEDHFIK","CDEFGHIJ":"CGJDHFEI","BFGHIJKL":"HJBFIGLK","BEGHIJKL":"EJIBHGLK","BEFHIJKL":"EJBFIHLK","BEFGIJKL":"EJBFIGLK","BEFGHJKL":"EJBFHGLK","BEFGHIKL":"EGBFIHLK","BEFGHIJL":"EJBFHGLI","BEFGHIJK":"EJBFHGIK","BDGHIJKL":"HJBDIGLK","BDFHIJKL":"HJBDIFLK","BDFGIJKL":"IGBDJFLK","BDFGHJKL":"HGBDJFLK","BDFGHIKL":"HGBDIFLK","BDFGHIJL":"HGBDJFLI","BDFGHIJK":"HGBDJFIK","BDEHIJKL":"EJBDIHLK","BDEGIJKL":"EJBDIGLK","BDEGHJKL":"EJBDHGLK","BDEGHIKL":"EGBDIHLK","BDEGHIJL":"EJBDHGLI","BDEGHIJK":"EJBDHGIK","BDEFIJKL":"EJBDIFLK","BDEFHJKL":"EJBDHFLK","BDEFHIKL":"EIBDHFLK","BDEFHIJL":"EJBDHFLI","BDEFHIJK":"EJBDHFIK","BDEFGJKL":"EGBDJFLK","BDEFGIKL":"EGBDIFLK","BDEFGIJL":"EGBDJFLI","BDEFGIJK":"EGBDJFIK","BDEFGHKL":"EGBDHFLK","BDEFGHJL":"HGBDJFLE","BDEFGHJK":"HGBDJFEK","BDEFGHIL":"EGBDHFLI","BDEFGHIK":"EGBDHFIK","BDEFGHIJ":"HGBDJFEI","BCGHIJKL":"HJBCIGLK","BCFHIJKL":"HJBCIFLK","BCFGIJKL":"IGBCJFLK","BCFGHJKL":"HGBCJFLK","BCFGHIKL":"HGBCIFLK","BCFGHIJL":"HGBCJFLI","BCFGHIJK":"HGBCJFIK","BCEHIJKL":"EJBCIHLK","BCEGIJKL":"EJBCIGLK","BCEGHJKL":"EJBCHGLK","BCEGHIKL":"EGBCIHLK","BCEGHIJL":"EJBCHGLI","BCEGHIJK":"EJBCHGIK","BCEFIJKL":"EJBCIFLK","BCEFHJKL":"EJBCHFLK","BCEFHIKL":"EIBCHFLK","BCEFHIJL":"EJBCHFLI","BCEFHIJK":"EJBCHFIK","BCEFGJKL":"EGBCJFLK","BCEFGIKL":"EGBCIFLK","BCEFGIJL":"EGBCJFLI","BCEFGIJK":"EGBCJFIK","BCEFGHKL":"EGBCHFLK","BCEFGHJL":"HGBCJFLE","BCEFGHJK":"HGBCJFEK","BCEFGHIL":"EGBCHFLI","BCEFGHIK":"EGBCHFIK","BCEFGHIJ":"HGBCJFEI","BCDHIJKL":"HJBCIDLK","BCDGIJKL":"IGBCJDLK","BCDGHJKL":"HGBCJDLK","BCDGHIKL":"HGBCIDLK","BCDGHIJL":"HGBCJDLI","BCDGHIJK":"HGBCJDIK","BCDFIJKL":"CJBDIFLK","BCDFHJKL":"CJBDHFLK","BCDFHIKL":"CIBDHFLK","BCDFHIJL":"CJBDHFLI","BCDFHIJK":"CJBDHFIK","BCDFGJKL":"CGBDJFLK","BCDFGIKL":"CGBDIFLK","BCDFGIJL":"CGBDJFLI","BCDFGIJK":"CGBDJFIK","BCDFGHKL":"CGBDHFLK","BCDFGHJL":"CGBDHFLJ","BCDFGHJK":"HGBCJFDK","BCDFGHIL":"CGBDHFLI","BCDFGHIK":"CGBDHFIK","BCDFGHIJ":"HGBCJFDI","BCDEIJKL":"EJBCIDLK","BCDEHJKL":"EJBCHDLK","BCDEHIKL":"EIBCHDLK","BCDEHIJL":"EJBCHDLI","BCDEHIJK":"EJBCHDIK","BCDEGJKL":"EGBCJDLK","BCDEGIKL":"EGBCIDLK","BCDEGIJL":"EGBCJDLI","BCDEGIJK":"EGBCJDIK","BCDEGHKL":"EGBCHDLK","BCDEGHJL":"HGBCJDLE","BCDEGHJK":"HGBCJDEK","BCDEGHIL":"EGBCHDLI","BCDEGHIK":"EGBCHDIK","BCDEGHIJ":"HGBCJDEI","BCDEFJKL":"CJBDEFLK","BCDEFIKL":"CEBDIFLK","BCDEFIJL":"CJBDEFLI","BCDEFIJK":"CJBDEFIK","BCDEFHKL":"CEBDHFLK","BCDEFHJL":"CJBDHFLE","BCDEFHJK":"CJBDHFEK","BCDEFHIL":"CEBDHFLI","BCDEFHIK":"CEBDHFIK","BCDEFHIJ":"CJBDHFEI","BCDEFGKL":"CGBDEFLK","BCDEFGJL":"CGBDJFLE","BCDEFGJK":"CGBDJFEK","BCDEFGIL":"CGBDEFLI","BCDEFGIK":"CGBDEFIK","BCDEFGIJ":"CGBDJFEI","BCDEFGHL":"CGBDHFLE","BCDEFGHK":"CGBDHFEK","BCDEFGHJ":"HGBCJFDE","BCDEFGHI":"CGBDHFEI","AFGHIJKL":"HJIFAGLK","AEGHIJKL":"EJIAHGLK","AEFHIJKL":"EJIFAHLK","AEFGIJKL":"EJIFAGLK","AEFGHJKL":"EGJFAHLK","AEFGHIKL":"EGIFAHLK","AEFGHIJL":"EGJFAHLI","AEFGHIJK":"EGJFAHIK","ADGHIJKL":"HJIDAGLK","ADFHIJKL":"HJIDAFLK","ADFGIJKL":"IGJDAFLK","ADFGHJKL":"HGJDAFLK","ADFGHIKL":"HGIDAFLK","ADFGHIJL":"HGJDAFLI","ADFGHIJK":"HGJDAFIK","ADEHIJKL":"EJIDAHLK","ADEGIJKL":"EJIDAGLK","ADEGHJKL":"EGJDAHLK","ADEGHIKL":"EGIDAHLK","ADEGHIJL":"EGJDAHLI","ADEGHIJK":"EGJDAHIK","ADEFIJKL":"EJIDAFLK","ADEFHJKL":"HJEDAFLK","ADEFHIKL":"HEIDAFLK","ADEFHIJL":"HJEDAFLI","ADEFHIJK":"HJEDAFIK","ADEFGJKL":"EGJDAFLK","ADEFGIKL":"EGIDAFLK","ADEFGIJL":"EGJDAFLI","ADEFGIJK":"EGJDAFIK","ADEFGHKL":"HGEDAFLK","ADEFGHJL":"HGJDAFLE","ADEFGHJK":"HGJDAFEK","ADEFGHIL":"HGEDAFLI","ADEFGHIK":"HGEDAFIK","ADEFGHIJ":"HGJDAFEI","ACGHIJKL":"HJICAGLK","ACFHIJKL":"HJICAFLK","ACFGIJKL":"IGJCAFLK","ACFGHJKL":"HGJCAFLK","ACFGHIKL":"HGICAFLK","ACFGHIJL":"HGJCAFLI","ACFGHIJK":"HGJCAFIK","ACEHIJKL":"EJICAHLK","ACEGIJKL":"EJICAGLK","ACEGHJKL":"EGJCAHLK","ACEGHIKL":"EGICAHLK","ACEGHIJL":"EGJCAHLI","ACEGHIJK":"EGJCAHIK","ACEFIJKL":"EJICAFLK","ACEFHJKL":"HJECAFLK","ACEFHIKL":"HEICAFLK","ACEFHIJL":"HJECAFLI","ACEFHIJK":"HJECAFIK","ACEFGJKL":"EGJCAFLK","ACEFGIKL":"EGICAFLK","ACEFGIJL":"EGJCAFLI","ACEFGIJK":"EGJCAFIK","ACEFGHKL":"HGECAFLK","ACEFGHJL":"HGJCAFLE","ACEFGHJK":"HGJCAFEK","ACEFGHIL":"HGECAFLI","ACEFGHIK":"HGECAFIK","ACEFGHIJ":"HGJCAFEI","ACDHIJKL":"HJICADLK","ACDGIJKL":"IGJCADLK","ACDGHJKL":"HGJCADLK","ACDGHIKL":"HGICADLK","ACDGHIJL":"HGJCADLI","ACDGHIJK":"HGJCADIK","ACDFIJKL":"CJIDAFLK","ACDFHJKL":"HJFCADLK","ACDFHIKL":"HFICADLK","ACDFHIJL":"HJFCADLI","ACDFHIJK":"HJFCADIK","ACDFGJKL":"CGJDAFLK","ACDFGIKL":"CGIDAFLK","ACDFGIJL":"CGJDAFLI","ACDFGIJK":"CGJDAFIK","ACDFGHKL":"HGFCADLK","ACDFGHJL":"CGJDAFLH","ACDFGHJK":"HGJCAFDK","ACDFGHIL":"HGFCADLI","ACDFGHIK":"HGFCADIK","ACDFGHIJ":"HGJCAFDI","ACDEIJKL":"EJICADLK","ACDEHJKL":"HJECADLK","ACDEHIKL":"HEICADLK","ACDEHIJL":"HJECADLI","ACDEHIJK":"HJECADIK","ACDEGJKL":"EGJCADLK","ACDEGIKL":"EGICADLK","ACDEGIJL":"EGJCADLI","ACDEGIJK":"EGJCADIK","ACDEGHKL":"HGECADLK","ACDEGHJL":"HGJCADLE","ACDEGHJK":"HGJCADEK","ACDEGHIL":"HGECADLI","ACDEGHIK":"HGECADIK","ACDEGHIJ":"HGJCADEI","ACDEFJKL":"CJEDAFLK","ACDEFIKL":"CEIDAFLK","ACDEFIJL":"CJEDAFLI","ACDEFIJK":"CJEDAFIK","ACDEFHKL":"HEFCADLK","ACDEFHJL":"HJFCADLE","ACDEFHJK":"HJECAFDK","ACDEFHIL":"HEFCADLI","ACDEFHIK":"HEFCADIK","ACDEFHIJ":"HJECAFDI","ACDEFGKL":"CGEDAFLK","ACDEFGJL":"CGJDAFLE","ACDEFGJK":"CGJDAFEK","ACDEFGIL":"CGEDAFLI","ACDEFGIK":"CGEDAFIK","ACDEFGIJ":"CGJDAFEI","ACDEFGHL":"HGFCADLE","ACDEFGHK":"HGECAFDK","ACDEFGHJ":"HGJCAFDE","ACDEFGHI":"HGECAFDI","ABGHIJKL":"HJBAIGLK","ABFHIJKL":"HJBAIFLK","ABFGIJKL":"IJBFAGLK","ABFGHJKL":"HJBFAGLK","ABFGHIKL":"HGBAIFLK","ABFGHIJL":"HJBFAGLI","ABFGHIJK":"HJBFAGIK","ABEHIJKL":"EJBAIHLK","ABEGIJKL":"EJBAIGLK","ABEGHJKL":"EJBAHGLK","ABEGHIKL":"EGBAIHLK","ABEGHIJL":"EJBAHGLI","ABEGHIJK":"EJBAHGIK","ABEFIJKL":"EJBAIFLK","ABEFHJKL":"EJBFAHLK","ABEFHIKL":"EIBFAHLK","ABEFHIJL":"EJBFAHLI","ABEFHIJK":"EJBFAHIK","ABEFGJKL":"EJBFAGLK","ABEFGIKL":"EGBAIFLK","ABEFGIJL":"EJBFAGLI","ABEFGIJK":"EJBFAGIK","ABEFGHKL":"EGBFAHLK","ABEFGHJL":"HJBFAGLE","ABEFGHJK":"HJBFAGEK","ABEFGHIL":"EGBFAHLI","ABEFGHIK":"EGBFAHIK","ABEFGHIJ":"HJBFAGEI","ABDHIJKL":"IJBDAHLK","ABDGIJKL":"IJBDAGLK","ABDGHJKL":"HJBDAGLK","ABDGHIKL":"IGBDAHLK","ABDGHIJL":"HJBDAGLI","ABDGHIJK":"HJBDAGIK","ABDFIJKL":"IJBDAFLK","ABDFHJKL":"HJBDAFLK","ABDFHIKL":"HIBDAFLK","ABDFHIJL":"HJBDAFLI","ABDFHIJK":"HJBDAFIK","ABDFGJKL":"FJBDAGLK","ABDFGIKL":"IGBDAFLK","ABDFGIJL":"FJBDAGLI","ABDFGIJK":"FJBDAGIK","ABDFGHKL":"HGBDAFLK","ABDFGHJL":"HGBDAFLJ","ABDFGHJK":"HGBDAFJK","ABDFGHIL":"HGBDAFLI","ABDFGHIK":"HGBDAFIK","ABDFGHIJ":"HGBDAFIJ","ABDEIJKL":"EJBAIDLK","ABDEHJKL":"EJBDAHLK","ABDEHIKL":"EIBDAHLK","ABDEHIJL":"EJBDAHLI","ABDEHIJK":"EJBDAHIK","ABDEGJKL":"EJBDAGLK","ABDEGIKL":"EGBAIDLK","ABDEGIJL":"EJBDAGLI","ABDEGIJK":"EJBDAGIK","ABDEGHKL":"EGBDAHLK","ABDEGHJL":"HJBDAGLE","ABDEGHJK":"HJBDAGEK","ABDEGHIL":"EGBDAHLI","ABDEGHIK":"EGBDAHIK","ABDEGHIJ":"HJBDAGEI","ABDEFJKL":"EJBDAFLK","ABDEFIKL":"EIBDAFLK","ABDEFIJL":"EJBDAFLI","ABDEFIJK":"EJBDAFIK","ABDEFHKL":"HEBDAFLK","ABDEFHJL":"HJBDAFLE","ABDEFHJK":"HJBDAFEK","ABDEFHIL":"HEBDAFLI","ABDEFHIK":"HEBDAFIK","ABDEFHIJ":"HJBDAFEI","ABDEFGKL":"EGBDAFLK","ABDEFGJL":"EGBDAFLJ","ABDEFGJK":"EGBDAFJK","ABDEFGIL":"EGBDAFLI","ABDEFGIK":"EGBDAFIK","ABDEFGIJ":"EGBDAFIJ","ABDEFGHL":"HGBDAFLE","ABDEFGHK":"HGBDAFEK","ABDEFGHJ":"HGBDAFEJ","ABDEFGHI":"HGBDAFEI","ABCHIJKL":"IJBCAHLK","ABCGIJKL":"IJBCAGLK","ABCGHJKL":"HJBCAGLK","ABCGHIKL":"IGBCAHLK","ABCGHIJL":"HJBCAGLI","ABCGHIJK":"HJBCAGIK","ABCFIJKL":"IJBCAFLK","ABCFHJKL":"HJBCAFLK","ABCFHIKL":"HIBCAFLK","ABCFHIJL":"HJBCAFLI","ABCFHIJK":"HJBCAFIK","ABCFGJKL":"CJBFAGLK","ABCFGIKL":"IGBCAFLK","ABCFGIJL":"CJBFAGLI","ABCFGIJK":"CJBFAGIK","ABCFGHKL":"HGBCAFLK","ABCFGHJL":"HGBCAFLJ","ABCFGHJK":"HGBCAFJK","ABCFGHIL":"HGBCAFLI","ABCFGHIK":"HGBCAFIK","ABCFGHIJ":"HGBCAFIJ","ABCEIJKL":"EJBAICLK","ABCEHJKL":"EJBCAHLK","ABCEHIKL":"EIBCAHLK","ABCEHIJL":"EJBCAHLI","ABCEHIJK":"EJBCAHIK","ABCEGJKL":"EJBCAGLK","ABCEGIKL":"EGBAICLK","ABCEGIJL":"EJBCAGLI","ABCEGIJK":"EJBCAGIK","ABCEGHKL":"EGBCAHLK","ABCEGHJL":"HJBCAGLE","ABCEGHJK":"HJBCAGEK","ABCEGHIL":"EGBCAHLI","ABCEGHIK":"EGBCAHIK","ABCEGHIJ":"HJBCAGEI","ABCEFJKL":"EJBCAFLK","ABCEFIKL":"EIBCAFLK","ABCEFIJL":"EJBCAFLI","ABCEFIJK":"EJBCAFIK","ABCEFHKL":"HEBCAFLK","ABCEFHJL":"HJBCAFLE","ABCEFHJK":"HJBCAFEK","ABCEFHIL":"HEBCAFLI","ABCEFHIK":"HEBCAFIK","ABCEFHIJ":"HJBCAFEI","ABCEFGKL":"EGBCAFLK","ABCEFGJL":"EGBCAFLJ","ABCEFGJK":"EGBCAFJK","ABCEFGIL":"EGBCAFLI","ABCEFGIK":"EGBCAFIK","ABCEFGIJ":"EGBCAFIJ","ABCEFGHL":"HGBCAFLE","ABCEFGHK":"HGBCAFEK","ABCEFGHJ":"HGBCAFEJ","ABCEFGHI":"HGBCAFEI","ABCDIJKL":"IJBCADLK","ABCDHJKL":"HJBCADLK","ABCDHIKL":"HIBCADLK","ABCDHIJL":"HJBCADLI","ABCDHIJK":"HJBCADIK","ABCDGJKL":"CJBDAGLK","ABCDGIKL":"IGBCADLK","ABCDGIJL":"CJBDAGLI","ABCDGIJK":"CJBDAGIK","ABCDGHKL":"HGBCADLK","ABCDGHJL":"HGBCADLJ","ABCDGHJK":"HGBCADJK","ABCDGHIL":"HGBCADLI","ABCDGHIK":"HGBCADIK","ABCDGHIJ":"HGBCADIJ","ABCDFJKL":"CJBDAFLK","ABCDFIKL":"CIBDAFLK","ABCDFIJL":"CJBDAFLI","ABCDFIJK":"CJBDAFIK","ABCDFHKL":"HFBCADLK","ABCDFHJL":"CJBDAFLH","ABCDFHJK":"HJBCAFDK","ABCDFHIL":"HFBCADLI","ABCDFHIK":"HFBCADIK","ABCDFHIJ":"HJBCAFDI","ABCDFGKL":"CGBDAFLK","ABCDFGJL":"CGBDAFLJ","ABCDFGJK":"CGBDAFJK","ABCDFGIL":"CGBDAFLI","ABCDFGIK":"CGBDAFIK","ABCDFGIJ":"CGBDAFIJ","ABCDFGHL":"CGBDAFLH","ABCDFGHK":"HGBCAFDK","ABCDFGHJ":"HGBCAFDJ","ABCDFGHI":"HGBCAFDI","ABCDEJKL":"EJBCADLK","ABCDEIKL":"EIBCADLK","ABCDEIJL":"EJBCADLI","ABCDEIJK":"EJBCADIK","ABCDEHKL":"HEBCADLK","ABCDEHJL":"HJBCADLE","ABCDEHJK":"HJBCADEK","ABCDEHIL":"HEBCADLI","ABCDEHIK":"HEBCADIK","ABCDEHIJ":"HJBCADEI","ABCDEGKL":"EGBCADLK","ABCDEGJL":"EGBCADLJ","ABCDEGJK":"EGBCADJK","ABCDEGIL":"EGBCADLI","ABCDEGIK":"EGBCADIK","ABCDEGIJ":"EGBCADIJ","ABCDEGHL":"HGBCADLE","ABCDEGHK":"HGBCADEK","ABCDEGHJ":"HGBCADEJ","ABCDEGHI":"HGBCADEI","ABCDEFKL":"CEBDAFLK","ABCDEFJL":"CJBDAFLE","ABCDEFJK":"CJBDAFEK","ABCDEFIL":"CEBDAFLI","ABCDEFIK":"CEBDAFIK","ABCDEFIJ":"CJBDAFEI","ABCDEFHL":"HFBCADLE","ABCDEFHK":"HEBCAFDK","ABCDEFHJ":"HJBCAFDE","ABCDEFHI":"HEBCAFDI","ABCDEFGL":"CGBDAFLE","ABCDEFGK":"CGBDAFEK","ABCDEFGJ":"CGBDAFEJ","ABCDEFGI":"CGBDAFEI","ABCDEFGH":"HGBCAFDE"};
+const SLOTS_TERCEROS = ['1A','1B','1D','1E','1G','1I','1K','1L'];
+// Estructura oficial de la ronda de 32 (partidos #73-#88). 'W:1X' = tercero asignado al 1.º del grupo X.
+const R32_OFICIAL = [
+  ['2A','2B'],['1E','W:1E'],['1F','2C'],['1C','2F'],
+  ['1I','W:1I'],['2E','2I'],['1A','W:1A'],['1L','W:1L'],
+  ['1D','W:1D'],['1G','W:1G'],['2K','2L'],['1H','2J'],
+  ['1B','W:1B'],['1J','2H'],['1K','W:1K'],['2D','2G']
 ];
 const ROUNDS = [ {key:'d16',n:16,nombre:'Dieciseisavos'}, {key:'o8',n:8,nombre:'Octavos'}, {key:'c4',n:4,nombre:'Cuartos'}, {key:'sf',n:2,nombre:'Semifinales'} ];
 
@@ -506,37 +518,50 @@ function standings(letra, scores) {
 }
 
 function clasificadosCompletos(scores) {
-  const firsts = {}, seconds = {}, thirds = [];
+  const firsts = {}, seconds = {}, thirdsByGroup = {}, terceros = [];
   for (const L of LETRAS) {
     const { orden, completo } = standings(L, scores);
     if (!completo) return null;
     firsts[L] = orden[0].t;
     seconds[L] = orden[1].t;
-    thirds.push({ ...orden[2], grupo: L });
+    thirdsByGroup[L] = orden[2].t;
+    terceros.push({ grupo: L, pts: orden[2].pts, gf: orden[2].gf, gc: orden[2].gc, t: orden[2].t });
   }
-  thirds.sort((x, y) => y.pts - x.pts || (y.gf - y.gc) - (x.gf - x.gc) || y.gf - x.gf || x.t.localeCompare(y.t));
-  return { firsts, seconds, thirds: thirds.slice(0, 8).map(x => x.t) };
+  terceros.sort((x, y) => y.pts - x.pts || (y.gf - y.gc) - (x.gf - x.gc) || y.gf - x.gf || x.t.localeCompare(y.t));
+  const qualifyingGroups = terceros.slice(0, 8).map(x => x.grupo).sort().join('');
+  return { firsts, seconds, thirdsByGroup, qualifyingGroups };
 }
 
 function buildR32(scores) {
   const c = clasificadosCompletos(scores);
   if (!c) return null;
-  return R32_TEMPLATE.map(([s1, s2]) => [slotTeam(s1, c), slotTeam(s2, c)]);
-}
-function slotTeam(slot, c) {
-  if (slot[0] === 'T') return c.thirds[parseInt(slot.slice(1)) - 1];
-  return slot[0] === '1' ? c.firsts[slot[1]] : c.seconds[slot[1]];
+  const asign = TERCEROS_ANEXO_C[c.qualifyingGroups];   // cadena de 8 grupos en orden de SLOTS_TERCEROS
+  if (!asign) return null;
+  const grupoTerceroDe = {};
+  SLOTS_TERCEROS.forEach((s, i) => { grupoTerceroDe[s] = asign[i]; });
+  const team = (slot) => {
+    if (slot[0] === '1') return c.firsts[slot[1]];
+    if (slot[0] === '2') return c.seconds[slot[1]];
+    if (slot[0] === 'W') return c.thirdsByGroup[grupoTerceroDe[slot.slice(2)]];   // 'W:1E' -> tercero asignado al 1.º E
+    return null;
+  };
+  return R32_OFICIAL.map(([s1, s2]) => [team(s1), team(s2)]);
 }
 
 // Propaga ganadores por el cuadro. Devuelve parejas por ronda + final + tercer puesto.
+// Progresión oficial del cuadro 2026 (no adyacente): cada ronda toma a los ganadores
+// de la ronda previa en los índices indicados (derivados de los partidos #89-#102).
+const O8_FROM = [[1,4],[0,2],[3,5],[6,7],[10,11],[8,9],[13,15],[12,14]];
+const C4_FROM = [[0,1],[4,5],[2,3],[6,7]];
+const SF_FROM = [[0,1],[2,3]];
 function propagate(r32, winners) {
   const p = { d16: r32, o8: [], c4: [], sf: [], final: [], tercer: [] };
-  const next = (prev, key, n) => { const out = []; for (let i = 0; i < n; i++) out.push([winners[key + '-' + (2*i)] || null, winners[key + '-' + (2*i+1)] || null]); return out; };
-  p.o8 = next(p.d16, 'd16', 8);
-  p.c4 = next(p.o8, 'o8', 4);
-  p.sf = next(p.c4, 'c4', 2);
-  p.final = [[winners['sf-0'] || null, winners['sf-1'] || null]];
-  const loser = (pair, w) => (!pair[0] || !pair[1] || !w) ? null : (pair[0] === w ? pair[1] : pair[0]);
+  const w = (key, i) => winners[key + '-' + i] || null;
+  p.o8 = O8_FROM.map(([a, b]) => [w('d16', a), w('d16', b)]);
+  p.c4 = C4_FROM.map(([a, b]) => [w('o8', a), w('o8', b)]);
+  p.sf = SF_FROM.map(([a, b]) => [w('c4', a), w('c4', b)]);
+  p.final = [[w('sf', 0), w('sf', 1)]];
+  const loser = (pair, win) => (!pair[0] || !pair[1] || !win) ? null : (pair[0] === win ? pair[1] : pair[0]);
   p.tercer = [[loser(p.sf[0], winners['sf-0']), loser(p.sf[1], winners['sf-1'])]];
   return p;
 }
@@ -675,9 +700,13 @@ function renderBracket(containerId, ctx) {
 
 function pickWinner(ctx, key, team) {
   const state = ctx === 'pred' ? predState : resultados;
-  state.winners[key] = team;
+  if (state.winners[key] === team) {
+    delete state.winners[key];   // pulsar el equipo ya seleccionado → desmarcar
+  } else {
+    state.winners[key] = team;
+  }
   const r32 = buildR32(state.scores);
-  sanitizeWinners(r32, state.winners);
+  sanitizeWinners(r32, state.winners);   // limpia en cascada las rondas siguientes que dependían de este ganador
   renderBracket(ctx === 'pred' ? 'pred-bracket' : 'res-bracket', ctx);
   if (ctx === 'res') { guardarResultados(); recalcularTodo(); }
 }
@@ -772,35 +801,35 @@ function calcularPuntos(p) {
   if (gE) d.grupoExacto = { n: gE, pts: gE * PTS.grupoExacto };
   if (gG) d.grupoGanador = { n: gG, pts: gG * PTS.grupoGanador };
 
-  // 2) Eliminatorias (dieciseisavos → semifinales)
+  // 2) Eliminatorias por SUPERVIVENCIA de equipos (independiente del cuadro):
+  //    +koGanador por cada país que el participante acertó que alcanza cada ronda.
   const predR32 = buildR32(p.scores), realR32 = buildR32(res.scores);
   if (predR32 && realR32) {
-    const pp = propagate(predR32, p.winners), pr = propagate(realR32, res.winners);
-    let koG = 0, koE = 0;
+    const setDe = (winners, key, n) => { const s = new Set(); for (let i = 0; i < n; i++) { const t = winners[key + '-' + i]; if (t) s.add(t); } return s; };
+    let koG = 0;
     ROUNDS.forEach(r => {
-      for (let i = 0; i < r.n; i++) {
-        const k = r.key + '-' + i, pw = p.winners[k], rw = res.winners[k];
-        if (!pw || !rw || pw !== rw) continue;
-        const mismoCruce = pp[r.key][i].every(t => t && pr[r.key][i].includes(t));
-        if (mismoCruce) { pts += PTS.koExacto; koE++; } else { pts += PTS.koGanador; koG++; }
-      }
+      const predSet = setDe(p.winners, r.key, r.n), realSet = setDe(res.winners, r.key, r.n);
+      let ac = 0;
+      predSet.forEach(t => { if (realSet.has(t)) ac++; });
+      koG += ac;
     });
-    if (koE) d.koExacto = { n: koE, pts: koE * PTS.koExacto };
-    if (koG) d.koGanador = { n: koG, pts: koG * PTS.koGanador };
+    if (koG) { pts += koG * PTS.koGanador; d.koGanador = { n: koG, pts: koG * PTS.koGanador }; }
 
-    // 3) Títulos
+    // 3) Títulos (comparación directa de equipos, también independiente del cuadro)
     const predCamp = p.winners['final'], realCamp = res.winners['final'];
-    const loserOf = (pair, w) => (!pair[0] || !pair[1] || !w) ? null : (pair[0] === w ? pair[1] : pair[0]);
-    const predSub = loserOf(pp.final[0], predCamp), realSub = loserOf(pr.final[0], realCamp);
+    const finalistas = wn => [wn['sf-0'], wn['sf-1']].filter(Boolean);
+    const predFin = finalistas(p.winners), realFin = finalistas(res.winners);
+    const predSub = predFin.find(t => t !== predCamp), realSub = realFin.find(t => t !== realCamp);
     const predTer = p.winners['tercer'], realTer = res.winners['tercer'];
-    const predCua = loserOf(pp.tercer[0], predTer), realCua = loserOf(pr.tercer[0], realTer);
+    const semiLosers = wn => { const s = setDe(wn, 'c4', 4); [wn['sf-0'], wn['sf-1']].forEach(t => s.delete(t)); return [...s]; };
+    const predCua = semiLosers(p.winners).find(t => t !== predTer), realCua = semiLosers(res.winners).find(t => t !== realTer);
     if (predCamp && realCamp && predCamp === realCamp) { pts += PTS.campeon; d.campeon = { pts: PTS.campeon }; }
     if (predSub && realSub && predSub === realSub) { pts += PTS.sub; d.sub = { pts: PTS.sub }; }
-    if (predTer && realTer && predTer === realTer) { pts += PTS.tercero, d.tercero = { pts: PTS.tercero }; }
+    if (predTer && realTer && predTer === realTer) { pts += PTS.tercero; d.tercero = { pts: PTS.tercero }; }
     if (predCua && realCua && predCua === realCua) { pts += PTS.cuarto; d.cuarto = { pts: PTS.cuarto }; }
 
-    // 4) Marcador exacto de la final (orientación independiente)
-    const pf = pp.final[0], rf = pr.final[0], ps = p.finalScore, rs = res.finalScore;
+    // 4) Marcador exacto de la final (finalistas correctos + marcador, orientación independiente)
+    const pf = [p.winners['sf-0'], p.winners['sf-1']], rf = [res.winners['sf-0'], res.winners['sf-1']], ps = p.finalScore, rs = res.finalScore;
     if (pf[0] && pf[1] && rf[0] && rf[1] && ps && rs && ps.g1 != null && rs.g1 != null && ps.g2 != null && rs.g2 != null) {
       const ok = (pf[0] === rf[0] && pf[1] === rf[1] && ps.g1 === rs.g1 && ps.g2 === rs.g2) ||
                  (pf[0] === rf[1] && pf[1] === rf[0] && ps.g1 === rs.g2 && ps.g2 === rs.g1);
@@ -838,14 +867,22 @@ function renderParticipantes() {
   el.innerHTML = `<p class="nota" style="margin-bottom:10px">💰 Cuotas pagadas: <strong style="color:${pagadas === participantes.length ? 'var(--success)' : 'var(--dorado-claro)'}">${pagadas}/${participantes.length}</strong></p>` + participantes.map(p => {
     const r32 = buildR32(p.scores), pp = r32 ? propagate(r32, p.winners) : null;
     const camp = p.winners['final'] || '—';
-    return `<div class="participant-card-mini">
-      <div><div style="font-weight:600" class="nombre-link" onclick="verApuesta('${String(p.id)}')">${esc(p.nombre)} 🔍</div>
-        <span class="pago-badge ${p.pagado ? 'si' : 'no'}">${p.pagado ? '💰 Cuota pagada' : '⏳ Cuota pendiente'}</span></div>
-      <div>
-        <span class="pred-tag ${resultados.winners['final'] && camp === resultados.winners['final'] ? 'hit' : ''}">🥇 ${esc(camp)}</span>
-        <span class="pred-tag">⚽ ${esc(p.extras.goleador || '—')}</span>
-        <span class="pred-tag">🥅 Final: ${pp && pp.final[0][0] ? esc(pp.final[0][0]) + ' ' + p.finalScore.g1 + '-' + p.finalScore.g2 + ' ' + esc(pp.final[0][1]) : '—'}</span>
-      </div>
+    const fin = pp && pp.final[0][0] ? esc(pp.final[0][0]) + ' ' + p.finalScore.g1 + '–' + p.finalScore.g2 + ' ' + esc(pp.final[0][1]) : '—';
+    return `<div class="participant-card-mini" style="display:block">
+      <details>
+        <summary>
+          <span class="expand-icon">▶</span>
+          <div style="flex:1">
+            <span style="font-weight:600" class="nombre-link" onclick="event.stopPropagation(); event.preventDefault(); verApuesta('${String(p.id)}')">${esc(p.nombre)} 🔍</span>
+          </div>
+          <span class="pago-badge ${p.pagado ? 'si' : 'no'}" style="margin-top:0">${p.pagado ? '💰 Pagada' : '⏳ Pendiente'}</span>
+        </summary>
+        <div class="participant-extras">
+          <div class="extra-item">🥇 Campeón: <strong>${esc(camp)}</strong></div>
+          <div class="extra-item">⚽ Goleador: <strong>${esc(p.extras.goleador || '—')}</strong></div>
+          <div class="extra-item" style="color:var(--dorado-claro)">🥅 Final: <strong>${fin}</strong></div>
+        </div>
+      </details>
     </div>`;
   }).join('');
 }
@@ -1043,7 +1080,7 @@ async function togglePago(id, pagado, checkbox) {
     renderClasificacion();
     showMsg('admin-msg', 'success', `✅ Cuota de ${p.nombre}: ${pagado ? 'PAGADA 💰' : 'pendiente ⏳'}.`);
   } catch (e) {
-    if (checkbox) checkbox.checked = !pagado;   // revertir el tic si falla
+    if (checkbox) checkbox.checked = !pagado;
     showMsg('admin-msg', 'error', '❌ No se pudo actualizar el pago: ' + e.message + '. ¿Has ejecutado el SQL de control de pago en Supabase?');
   }
 }
@@ -1331,6 +1368,101 @@ async function initBackup() {
   } catch (e) {}
 }
 
+// ═════════════════ COPIA AUTOMÁTICA PROGRAMADA ═════════════════
+function configAutoBackup() {
+  return store.get('autoBackup', { on: false, horas: ['14:00', '17:00'], hechas: {} });
+}
+
+function guardarConfigAutoBackup() {
+  const cfg = configAutoBackup();
+  cfg.on = document.getElementById('auto-backup-on').checked;
+  const horas = document.getElementById('auto-backup-horas').value
+    .split(',').map(s => s.trim()).filter(s => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s));
+  if (horas.length) cfg.horas = horas;
+  store.set('autoBackup', cfg);
+  pintarEstadoAutoBackup();
+}
+
+function pintarEstadoAutoBackup() {
+  const cfg = configAutoBackup();
+  const el = document.getElementById('auto-backup-estado');
+  if (!el) return;
+  if (!cfg.on) { el.textContent = 'Desactivada.'; return; }
+  const hoy = new Date().toISOString().slice(0, 10);
+  const pendientes = cfg.horas.filter(h => cfg.hechas[h] !== hoy);
+  el.textContent = `Activa: ${cfg.horas.join(', ')} · Hoy ${cfg.horas.length - pendientes.length}/${cfg.horas.length} hechas.`;
+}
+
+async function comprobarBackupAuto() {
+  const cfg = configAutoBackup();
+  if (!cfg.on) return;
+  const ahora = new Date();
+  const hoy = ahora.toISOString().slice(0, 10);
+  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  for (const h of cfg.horas) {
+    const [hh, mm] = h.split(':').map(Number);
+    if (minutosAhora >= hh * 60 + mm && cfg.hechas[h] !== hoy) {
+      const ok = await hacerBackup('auto');
+      if (ok) {
+        cfg.hechas[h] = hoy;
+        store.set('autoBackup', cfg);
+        showMsg('backup-msg', 'success', `⏰ Copia automática de las ${h} realizada (${new Date().toLocaleTimeString('es-ES')}).`);
+      }
+    }
+  }
+  pintarEstadoAutoBackup();
+}
+setInterval(comprobarBackupAuto, 60000);
+
+// ═════════════════ BACKUPS EN SERVIDOR (horario configurable) ═════════════════
+async function guardarHorarioServidor() {
+  if (!nubeActiva()) return showMsg('servidor-msg', 'error', '❌ Necesitas la nube activa para esto.');
+  const horas = document.getElementById('servidor-horas').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+  if (!horas.length || !horas.every(h => /^([01]?\d|2[0-3]):[0-5]\d$/.test(h)))
+    return showMsg('servidor-msg', 'error', '⚠️ Formato de horas no válido. Ejemplo: 14:00, 17:00');
+  try {
+    const creados = await sbFetch('/rest/v1/rpc/programar_backups', {
+      method: 'POST',
+      body: JSON.stringify({ p_horas: horas, p_clave: adminClave })
+    });
+    showMsg('servidor-msg', 'success', '✅ Horario guardado en el servidor: ' + creados.join(' · '));
+    cargarEstadoServidor();
+  } catch (e) {
+    showMsg('servidor-msg', 'error', '❌ No se pudo programar: ' + e.message +
+      (e.message.includes('does not exist') ? ' — ¿Has ejecutado el SQL "horario-backup-desde-web" en Supabase?' : ''));
+  }
+}
+
+async function cargarEstadoServidor() {
+  if (!nubeActiva() || !adminClave) return;
+  const el = document.getElementById('servidor-estado');
+  try {
+    const [horarios, snaps] = await Promise.all([
+      sbFetch('/rest/v1/rpc/ver_horarios_backup', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) }),
+      sbFetch('/rest/v1/rpc/listar_backups', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) })
+    ]);
+    const horasES = (horarios || []).map(h => {
+      const m = h.programacion_utc.match(/^(\d{1,2}) (\d{1,2}) /);
+      if (!m) return h.programacion_utc;
+      return String((+m[2] + 2) % 24).padStart(2, '0') + ':' + String(+m[1]).padStart(2, '0');
+    }).sort();
+    if (document.getElementById('servidor-horas') && !document.getElementById('servidor-horas').value && horasES.length)
+      document.getElementById('servidor-horas').value = horasES.join(', ');
+    const listaSnaps = (snaps || []).map(s =>
+      `<div class="detalle-partido" style="grid-template-columns:auto 1fr auto">
+        <span class="dp-fecha">#${s.id}</span>
+        <span>${new Date(s.creado).toLocaleString('es-ES')}</span>
+        <span class="dp-real">${s.tamano_kb} KB</span>
+      </div>`).join('');
+    el.innerHTML = `<strong style="color:var(--dorado-claro)">Horario activo (hora española):</strong> ${horasES.join(', ') || 'ninguno'}<br>
+      <strong style="color:var(--dorado-claro)">Últimos snapshots en servidor:</strong>
+      ${listaSnaps || '<div class="nota">Todavía no hay snapshots.</div>'}`;
+  } catch (e) {
+    el.innerHTML = '<span style="color:var(--error)">No se pudo consultar el servidor: ' + esc(e.message) + '</span>';
+  }
+}
+
 // ═════════════════ DETALLE DE APUESTA (modal) ═════════════════
 const NOMBRE_RONDA = { d16: 'Dieciseisavos', o8: 'Octavos', c4: 'Cuartos', sf: 'Semifinales' };
 
@@ -1344,7 +1476,6 @@ function verApuesta(id) {
   let html = `<div class="card-title" style="margin-bottom:4px">📋 Apuesta de ${esc(p.nombre)}</div>
     <p class="nota" style="margin-bottom:14px">Puntos actuales: <strong style="color:var(--dorado)">${p.puntos || 0}</strong> · <span class="pago-badge ${p.pagado ? 'si' : 'no'}" style="margin:0">${p.pagado ? '💰 Cuota pagada' : '⏳ Cuota pendiente'}</span> · Las apuestas son inmutables una vez registradas.</p>`;
 
-  // ── Títulos y extras ──
   const camp = p.winners['final'] || '—';
   const sub = pp && pp.final[0][0] && pp.final[0][1] ? loserOf(pp.final[0], camp) : '—';
   const ter = p.winners['tercer'] || '—';
@@ -1364,26 +1495,27 @@ function verApuesta(id) {
     <div class="titulo-item"><div class="lbl-mini">👑 Goles torneo</div><div class="val-mini">${ex.golesTorneo ?? '—'}</div></div>
   </div>`;
 
-  // ── Cuadro de eliminatorias ──
   if (pp) {
     html += `<div class="subtitle" style="margin-top:4px">⚔️ Su cuadro de eliminatorias</div>`;
+    const realSetKO = (key, n) => { const s = new Set(); for (let i = 0; i < n; i++) { const t = resultados.winners[key + '-' + i]; if (t) s.add(t); } return s; };
     for (const r of ROUNDS) {
-      const picks = [];
+      const real = realSetKO(r.key, r.n);
+      const picks = [], vistos = new Set();
       for (let i = 0; i < r.n; i++) {
         const win = p.winners[r.key + '-' + i];
-        if (!win) continue;
-        const realWin = resultados.winners[r.key + '-' + i];
-        const estado = realWin ? (realWin === win ? ' hit' : '') : '';
+        if (!win || vistos.has(win)) continue;
+        vistos.add(win);
+        const estado = real.size ? (real.has(win) ? ' hit' : '') : '';
         picks.push(`<span class="pred-tag${estado}">${esc(win)}</span>`);
       }
       html += `<div class="nota" style="margin-bottom:2px">${NOMBRE_RONDA[r.key]} — avanzan:</div><div class="detalle-ronda">${picks.join('') || '—'}</div>`;
     }
-    const tHit = resultados.winners['tercer'] && resultados.winners['tercer'] === ter ? ' hit' : '';
-    const cHit = resultados.winners['final'] && resultados.winners['final'] === camp ? ' hit' : '';
+    const realCampT = resultados.winners['final'], realTerT = resultados.winners['tercer'];
+    const cHit = realCampT && realCampT === camp ? ' hit' : '';
+    const tHit = realTerT && realTerT === ter ? ' hit' : '';
     html += `<div class="detalle-ronda"><span class="pred-tag${cHit}">🏆 Campeón: ${esc(camp)}</span><span class="pred-tag${tHit}">🥉 3.er puesto: ${esc(ter)}</span></div>`;
   }
 
-  // ── 72 partidos de grupos ──
   html += `<div class="subtitle">⚽ Sus 72 marcadores de la fase de grupos</div>
     <p class="nota" style="margin-bottom:10px">✅ exacto (+${PTS.grupoExacto}) · 🟡 signo (+${PTS.grupoGanador}) · ❌ fallo · ⏳ sin jugar</p>`;
   for (const L of LETRAS) {
@@ -1420,104 +1552,6 @@ function cerrarModal() {
   document.body.style.overflow = '';
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
-
-// ═════════════════ COPIA AUTOMÁTICA PROGRAMADA ═════════════════
-// Config en localStorage: { on: bool, horas: ['14:00','17:00'], hechas: { '14:00': ' 2026-06-10', ... } }
-function configAutoBackup() {
-  return store.get('autoBackup', { on: false, horas: ['14:00', '17:00'], hechas: {} });
-}
-
-function guardarConfigAutoBackup() {
-  const cfg = configAutoBackup();
-  cfg.on = document.getElementById('auto-backup-on').checked;
-  const horas = document.getElementById('auto-backup-horas').value
-    .split(',').map(s => s.trim()).filter(s => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s));
-  if (horas.length) cfg.horas = horas;
-  store.set('autoBackup', cfg);
-  pintarEstadoAutoBackup();
-}
-
-function pintarEstadoAutoBackup() {
-  const cfg = configAutoBackup();
-  const el = document.getElementById('auto-backup-estado');
-  if (!el) return;
-  if (!cfg.on) { el.textContent = 'Desactivada.'; return; }
-  const ahora = new Date();
-  const hoy = ahora.toISOString().slice(0, 10);
-  const pendientes = cfg.horas.filter(h => cfg.hechas[h] !== hoy);
-  el.textContent = `Activa: ${cfg.horas.join(', ')} · Hoy ${cfg.horas.length - pendientes.length}/${cfg.horas.length} hechas.`;
-}
-
-async function comprobarBackupAuto() {
-  const cfg = configAutoBackup();
-  if (!cfg.on) return;
-  const ahora = new Date();
-  const hoy = ahora.toISOString().slice(0, 10);
-  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
-  for (const h of cfg.horas) {
-    const [hh, mm] = h.split(':').map(Number);
-    if (minutosAhora >= hh * 60 + mm && cfg.hechas[h] !== hoy) {
-      const ok = await hacerBackup('auto');
-      if (ok) {
-        cfg.hechas[h] = hoy;
-        store.set('autoBackup', cfg);
-        showMsg('backup-msg', 'success', `⏰ Copia automática de las ${h} realizada (${new Date().toLocaleTimeString('es-ES')}).`);
-      }
-    }
-  }
-  pintarEstadoAutoBackup();
-}
-setInterval(comprobarBackupAuto, 60000);   // comprobar cada minuto
-
-// ═════════════════ BACKUPS EN SERVIDOR (horario configurable) ═════════════════
-async function guardarHorarioServidor() {
-  if (!nubeActiva()) return showMsg('servidor-msg', 'error', '❌ Necesitas la nube activa para esto.');
-  const horas = document.getElementById('servidor-horas').value
-    .split(',').map(s => s.trim()).filter(Boolean);
-  if (!horas.length || !horas.every(h => /^([01]?\d|2[0-3]):[0-5]\d$/.test(h)))
-    return showMsg('servidor-msg', 'error', '⚠️ Formato de horas no válido. Ejemplo: 14:00, 17:00');
-  try {
-    const creados = await sbFetch('/rest/v1/rpc/programar_backups', {
-      method: 'POST',
-      body: JSON.stringify({ p_horas: horas, p_clave: adminClave })
-    });
-    showMsg('servidor-msg', 'success', '✅ Horario guardado en el servidor: ' + creados.join(' · '));
-    cargarEstadoServidor();
-  } catch (e) {
-    showMsg('servidor-msg', 'error', '❌ No se pudo programar: ' + e.message +
-      (e.message.includes('does not exist') ? ' — ¿Has ejecutado el SQL "horario-backup-desde-web" en Supabase?' : ''));
-  }
-}
-
-async function cargarEstadoServidor() {
-  if (!nubeActiva() || !adminClave) return;
-  const el = document.getElementById('servidor-estado');
-  try {
-    const [horarios, snaps] = await Promise.all([
-      sbFetch('/rest/v1/rpc/ver_horarios_backup', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) }),
-      sbFetch('/rest/v1/rpc/listar_backups', { method: 'POST', body: JSON.stringify({ p_clave: adminClave }) })
-    ]);
-    // De la programación cron UTC ('mm hh * * *') a hora española (+2)
-    const horasES = (horarios || []).map(h => {
-      const m = h.programacion_utc.match(/^(\d{1,2}) (\d{1,2}) /);
-      if (!m) return h.programacion_utc;
-      return String((+m[2] + 2) % 24).padStart(2, '0') + ':' + String(+m[1]).padStart(2, '0');
-    }).sort();
-    if (document.getElementById('servidor-horas') && !document.getElementById('servidor-horas').value && horasES.length)
-      document.getElementById('servidor-horas').value = horasES.join(', ');
-    const listaSnaps = (snaps || []).map(s =>
-      `<div class="detalle-partido" style="grid-template-columns:auto 1fr auto">
-        <span class="dp-fecha">#${s.id}</span>
-        <span>${new Date(s.creado).toLocaleString('es-ES')}</span>
-        <span class="dp-real">${s.tamano_kb} KB</span>
-      </div>`).join('');
-    el.innerHTML = `<strong style="color:var(--dorado-claro)">Horario activo (hora española):</strong> ${horasES.join(', ') || 'ninguno'}<br>
-      <strong style="color:var(--dorado-claro)">Últimos snapshots en servidor:</strong>
-      ${listaSnaps || '<div class="nota">Todavía no hay snapshots.</div>'}`;
-  } catch (e) {
-    el.innerHTML = '<span style="color:var(--error)">No se pudo consultar el servidor: ' + esc(e.message) + '</span>';
-  }
-}
 
 // ═════════════════ UI GENERAL ═════════════════
 function actualizarEstadisticas() {
@@ -1558,7 +1592,7 @@ window.addEventListener('scroll', () => document.getElementById('fab').classList
   recalcularTodo();
   initBackup();
   cargarNube();
-  setTimeout(comprobarBackupAuto, 4000);   // catch-up: copia pendiente del día al abrir
+  setTimeout(comprobarBackupAuto, 4000);
 })();
 </script>
 </body>
