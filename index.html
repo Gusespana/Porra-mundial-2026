@@ -247,6 +247,16 @@
 
   <!-- ══ REGISTRO ══ -->
   <div id="tab-registro" class="section">
+<div class="card" id="rehacer-card" style="border:1px solid var(--dorado); background:rgba(212,175,55,.06)">
+  <div class="card-title">🔄 ¿Ya te habías registrado? Rehaz tu cuadro</div>
+  <p class="nota" style="margin-bottom:10px">El cuadro de eliminatorias se ha corregido a los <strong>cruces oficiales de la FIFA</strong>. Si ya tenías tu apuesta, escribe tu nombre para recuperarla y volver a marcar el cuadro. <strong>Tus marcadores de la fase de grupos se mantienen</strong>; solo vuelves a elegir las eliminatorias. Plazo: hasta el <strong>30 de junio a las 18:59</strong>.</p>
+  <p class="nota" style="margin-bottom:12px">Acuérdate de marcar tú mismo los 4 partidos ya jugados (Sudáfrica-Canadá, Alemania-Paraguay, Países Bajos-Marruecos y Brasil-Japón) con su resultado real. Si no cambias nada, se queda lo que ya tenías.</p>
+  <div class="form-grid">
+    <div class="field"><label>Tu nombre</label><input type="text" id="rehacer-nombre" placeholder="Tal como te registraste" maxlength="50"></div>
+  </div>
+  <button class="btn btn-primary" onclick="cargarParaRehacer()">🔄 Recuperar mi apuesta</button>
+  <div class="msg" id="rehacer-msg" style="margin-top:10px"></div>
+</div>
     <div class="card">
       <div class="card-title">✍️ 1 · Tus datos</div>
       <p class="nube-estado nota" style="margin-bottom:12px"></p>
@@ -422,6 +432,24 @@
 
 </div>
 
+<div class="modal-overlay" id="intro-overlay" onclick="if(event.target===this)cerrarIntro()">
+  <div class="modal-box" style="max-width:560px; text-align:center; border-color:var(--dorado)">
+    <div style="font-size:54px; line-height:1; margin-bottom:6px">🔄</div>
+    <h2 style="color:var(--dorado-claro); margin:0 0 10px; font-size:22px">Hay que rehacer el cuadro</h2>
+    <p style="margin:0 0 14px; line-height:1.55">El cuadro de eliminatorias se ha corregido a los <strong>cruces oficiales de la FIFA</strong>. Para que tu apuesta cuente, tienes que <strong>volver a marcar tu cuadro de eliminatorias</strong>.</p>
+    <div style="text-align:left; background:var(--gris-medio); border-radius:10px; padding:14px 16px; margin:0 0 14px; font-size:14px; line-height:1.7">
+      ✔️ Tus marcadores de la fase de grupos <strong>se mantienen</strong>.<br>
+      ✔️ Solo vuelves a elegir <strong>las eliminatorias</strong>.<br>
+      ✔️ Marca tú mismo los <strong>4 partidos ya jugados</strong> con su resultado real (ya los conoces).
+    </div>
+    <p style="color:var(--dorado-claro); font-weight:600; margin:0 0 18px">⏰ Plazo: hasta el 30 de junio a las 18:59</p>
+    <button class="btn btn-primary" style="width:100%; margin-bottom:10px" onclick="introRehacer()">🔄 Rehacer mi cuadro ahora</button>
+    <button class="btn" style="width:100%; background:var(--gris); border-color:var(--gris); margin-bottom:14px" onclick="cerrarIntro()">Lo haré luego</button>
+    <label style="display:flex; align-items:center; justify-content:center; gap:8px; font-size:13px; color:var(--texto-muted); cursor:pointer">
+      <input type="checkbox" id="intro-noshow"> No volver a mostrar este aviso en este dispositivo
+    </label>
+  </div>
+</div>
 <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)cerrarModal()">
   <div class="modal-box">
     <button class="modal-close" onclick="cerrarModal()">✕</button>
@@ -496,6 +524,7 @@ let resultados = store.get('resultados', { scores:{}, winners:{}, finalScore:{g1
 
 // Estado de registro en curso (no se guarda hasta confirmar)
 const predState = { scores:{}, winners:{}, finalScore:{g1:null,g2:null} };
+let rehacerNombre = null;   // si tiene valor, estamos rehaciendo la apuesta de ese nombre
 
 // ═════════════════ LÓGICA DE CLASIFICACIÓN DE GRUPOS ═════════════════
 function standings(letra, scores) {
@@ -724,7 +753,7 @@ async function registrar() {
 
   if (!nombre) return regError('⚠️ El nombre es obligatorio.');
   if (nubeActiva()) await cargarNube(true);   // refrescar para validar duplicados contra la nube
-  if (participantes.find(p => p.nombre.toLowerCase() === nombre.toLowerCase())) return regError('❌ Este nombre ya está registrado.');
+  if (!rehacerNombre && participantes.find(p => p.nombre.toLowerCase() === nombre.toLowerCase())) return regError('❌ Este nombre ya está registrado.');
 
   const n = actualizarProgresoGrupos('pred');
   if (n < 72) return regError(`⚠️ Te faltan ${72 - n} partidos de grupos por predecir.`);
@@ -735,6 +764,14 @@ async function registrar() {
   if (!w['final']) return regError('⚠️ Elige el ganador de tu final.');
   if (!w['tercer']) return regError('⚠️ Elige el ganador del partido por el 3.er puesto.');
   if (predState.finalScore.g1 == null || predState.finalScore.g2 == null) return regError('⚠️ Indica el marcador exacto de la final.');
+
+  // Coherencia campeón ↔ marcador de la final: si no es empate, el campeón debe ser quien marca más goles.
+  const _finPair = [w['sf-0'], w['sf-1']];
+  const _g1 = predState.finalScore.g1, _g2 = predState.finalScore.g2;
+  if (_g1 !== _g2 && _finPair[0] && _finPair[1]) {
+    const _ganaMarcador = _g1 > _g2 ? _finPair[0] : _finPair[1];
+    if (_ganaMarcador !== w['final']) return regError('⚠️ El marcador de la final no coincide con tu campeón: si no hay empate, gana quien marca más goles. Corrige el marcador o el campeón. (Si quieres que tu campeón gane en la prórroga o penaltis, pon empate en el marcador.)');
+  }
 
   const goleador = document.getElementById('pred-goleador').value.trim();
   const portero = document.getElementById('pred-portero').value.trim();
@@ -751,6 +788,27 @@ async function registrar() {
     finalScore: { ...predState.finalScore },
     extras: { goleador, portero, mvp, sorpresa: document.getElementById('pred-sorpresa').value, golesTorneo: parseInt(golesTorneo) }
   };
+  if (rehacerNombre) {
+    // ── Rehacer: actualizar la apuesta existente (no crear una nueva) ──
+    if (nubeActiva()) {
+      try {
+        await sbFetch('/rest/v1/rpc/rehacer_apuesta', { method: 'POST', body: JSON.stringify({ p_nombre: rehacerNombre, p_datos: datos }) });
+      } catch (e) {
+        if (/plazo|terminado/i.test(e.message)) return regError('❌ El plazo para rehacer tu cuadro ha terminado.');
+        if (/no se encontr/i.test(e.message)) return regError('❌ No se encontró tu apuesta para actualizar. Recárgala con tu nombre.');
+        return regError('❌ No se pudo guardar el cambio: ' + e.message);
+      }
+    }
+    const ex = participantes.find(p => p.nombre.toLowerCase() === rehacerNombre.toLowerCase());
+    if (ex) { ex.scores = datos.scores; ex.winners = datos.winners; ex.finalScore = datos.finalScore; ex.extras = datos.extras; }
+    store.set('participantes', participantes);
+    recalcularTodo();
+    hacerBackup('rehacer');
+    showMsg('reg-msg', 'success', '🎉 ¡Cuadro actualizado! Tu apuesta ya usa los cruces oficiales de la FIFA. Gracias por rehacerla.');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    limpiarRegistro();
+    return;
+  }
   let nuevoId = Date.now();
   if (nubeActiva()) {
     try {
@@ -778,11 +836,45 @@ async function registrar() {
 }
 function regError(t) { showMsg('reg-msg', 'error', t); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 function limpiarRegistro() {
+  rehacerNombre = null;
+  const _rn = document.getElementById('rehacer-nombre'); if (_rn) _rn.value = '';
+  const _regn = document.getElementById('reg-nombre'); if (_regn) _regn.readOnly = false;
+  ['pred-goleador','pred-portero','pred-mvp','pred-goles-torneo','pred-sorpresa'].forEach(id => { const e = document.getElementById(id); if (e) e.disabled = false; });
   ['reg-nombre','pred-goleador','pred-portero','pred-mvp','pred-goles-torneo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('pred-sorpresa').selectedIndex = 0;
   predState.scores = {}; predState.winners = {}; predState.finalScore = { g1: null, g2: null };
   renderGrupos('pred-grupos', 'pred');
   renderBracket('pred-bracket', 'pred');
+}
+
+async function cargarParaRehacer() {
+  const nombre = document.getElementById('rehacer-nombre').value.trim();
+  if (!nombre) { showMsg('rehacer-msg', 'error', '⚠️ Escribe tu nombre.'); return; }
+  if (nubeActiva()) await cargarNube(true);
+  const p = participantes.find(x => x.nombre.toLowerCase() === nombre.toLowerCase());
+  if (!p) { showMsg('rehacer-msg', 'error', '❌ No encontramos ninguna apuesta con ese nombre. Revisa que esté escrito igual que al registrarte.'); return; }
+  // Mantener sus grupos y extras; el cuadro de eliminatorias se vuelve a marcar desde cero sobre la estructura oficial.
+  rehacerNombre = p.nombre;
+  predState.scores = JSON.parse(JSON.stringify(p.scores));
+  predState.winners = JSON.parse(JSON.stringify(p.winners || {}));
+  const _r32prev = buildR32(predState.scores);
+  sanitizeWinners(_r32prev, predState.winners);   // conservar las elecciones previas que encajen en la estructura oficial
+  predState.finalScore = (p.finalScore && (p.finalScore.g1 != null || p.finalScore.g2 != null)) ? { g1: p.finalScore.g1, g2: p.finalScore.g2 } : { g1: null, g2: null };
+  document.getElementById('reg-nombre').value = p.nombre;
+  document.getElementById('reg-nombre').readOnly = true;
+  document.getElementById('pred-goleador').value = (p.extras && p.extras.goleador) || '';
+  document.getElementById('pred-portero').value = (p.extras && p.extras.portero) || '';
+  document.getElementById('pred-mvp').value = (p.extras && p.extras.mvp) || '';
+  document.getElementById('pred-goles-torneo').value = (p.extras && p.extras.golesTorneo != null) ? p.extras.golesTorneo : '';
+  const sorp = document.getElementById('pred-sorpresa');
+  if (sorp && p.extras) { [...sorp.options].forEach((o, i) => { if (o.value === (p.extras.sorpresa || '')) sorp.selectedIndex = i; }); }
+  renderGrupos('pred-grupos', 'pred');
+  document.querySelectorAll('#pred-grupos input').forEach(i => { i.disabled = true; });
+  ['pred-goleador','pred-portero','pred-mvp','pred-goles-torneo','pred-sorpresa'].forEach(id => { const e = document.getElementById(id); if (e) e.disabled = true; });   // los extras tampoco se tocan al rehacer
+  renderBracket('pred-bracket', 'pred');
+  actualizarProgresoGrupos('pred');
+  showMsg('rehacer-msg', 'success', '✅ Apuesta recuperada. Tus grupos y extras quedan fijos, y tus elecciones anteriores del cuadro se mantienen cargadas. Revisa el cuadro y marca tú mismo los 4 partidos ya jugados con su resultado real (ajusta lo que quieras). Pulsa CONFIRMAR para guardar. Si no cambias nada, se queda lo que ya tenías.');
+  const bc = document.getElementById('pred-bracket'); if (bc) bc.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ═════════════════ CÁLCULO DE PUNTOS ═════════════════
@@ -1580,6 +1672,40 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
 }));
 window.addEventListener('scroll', () => document.getElementById('fab').classList.toggle('visible', window.scrollY > 300));
 
+// ═════════════════ PANTALLA DE BIENVENIDA (rehacer cuadro) ═════════════════
+const PLAZO_REHACER = Date.parse('2026-06-30T16:59:00Z');   // 30 jun 18:59 hora de Madrid (16:59 UTC)
+
+function cerrarIntro() {
+  const chk = document.getElementById('intro-noshow');
+  if (chk && chk.checked) store.set('introRehacerOculto', true);
+  const ov = document.getElementById('intro-overlay');
+  if (ov) ov.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function introRehacer() {
+  cerrarIntro();
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+  const tb = document.querySelector('.tab-btn[data-tab="registro"]');
+  if (tb) tb.classList.add('active');
+  const panel = document.getElementById('tab-registro');
+  if (panel) panel.classList.add('active');
+  setTimeout(() => {
+    const card = document.getElementById('rehacer-card');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const inp = document.getElementById('rehacer-nombre');
+    if (inp) inp.focus();
+  }, 90);
+}
+
+function mostrarIntroSiProcede() {
+  if (Date.now() >= PLAZO_REHACER) return;            // pasado el plazo: no se muestra
+  if (store.get('introRehacerOculto', false)) return; // el usuario lo ocultó
+  const ov = document.getElementById('intro-overlay');
+  if (ov) { ov.classList.add('open'); document.body.style.overflow = 'hidden'; }
+}
+
 // ═════════════════ INIT ═════════════════
 (function init() {
   // Poblar select de país sorpresa
@@ -1593,6 +1719,7 @@ window.addEventListener('scroll', () => document.getElementById('fab').classList
   initBackup();
   cargarNube();
   setTimeout(comprobarBackupAuto, 4000);
+  mostrarIntroSiProcede();
 })();
 </script>
 </body>
