@@ -356,7 +356,7 @@
       <div class="card">
         <div class="card-title">🌟 Resultados reales — extras</div>
         <div class="form-grid">
-          <div class="field"><label>⚽ Máximo goleador real</label><input type="text" id="res-goleador" oninput="onResExtra()"></div>
+          <div class="field"><label>⚽ Máximo goleador real</label><input type="text" id="res-goleador" oninput="onResExtra()" placeholder="Goleador (Bota de Oro)"><input type="text" id="res-goleador2" oninput="onResExtra()" placeholder="2.º goleador (solo si empatan en la Bota de Oro)" style="margin-top:6px"></div>
           <div class="field"><label>🎽 Mejor portero real</label><input type="text" id="res-portero" oninput="onResExtra()"></div>
           <div class="field"><label>🌟 Balón de Oro real</label><input type="text" id="res-mvp" oninput="onResExtra()"></div>
           <div class="field"><label>👑 Total goles del torneo</label><input type="number" id="res-goles-torneo" oninput="onResExtra()"></div>
@@ -465,6 +465,7 @@
 // ── SUPABASE: pega aquí la URL y la anon key de tu proyecto ──
 const SUPABASE_URL = 'https://ptqmhiwiywydsrnxthna.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cW1oaXdpeXd5ZHNybnh0aG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwODAxNjcsImV4cCI6MjA5NjY1NjE2N30.zVd2NQWm9oavagpP-vveY3E5yDuCf5SxK1Qyp6b0xks';
+;
 const nubeActiva = () => !SUPABASE_URL.includes('TU-PROYECTO') && SUPABASE_ANON_KEY.length > 30;
 let adminClave = null;   // se guarda en memoria al entrar al panel
 
@@ -529,7 +530,8 @@ let rehacerNombre = null;   // si tiene valor, estamos rehaciendo la apuesta de 
 // ═════════════════ LÓGICA DE CLASIFICACIÓN DE GRUPOS ═════════════════
 function standings(letra, scores) {
   const teams = GRUPOS[letra];
-  const st = teams.map(t => ({ t, pts:0, gf:0, gc:0, j:0 }));
+  const st = teams.map((t, idx) => ({ t, idx, pts:0, gf:0, gc:0, j:0 }));
+  const results = [];
   let completos = 0;
   PAIRS.forEach((pair, i) => {
     const s = scores[letra + i];
@@ -541,8 +543,33 @@ function standings(letra, scores) {
     if (g1 > g2) st[a].pts += 3;
     else if (g2 > g1) st[b].pts += 3;
     else { st[a].pts++; st[b].pts++; }
+    results.push({ a, b, g1, g2 });
   });
-  st.sort((x, y) => y.pts - x.pts || (y.gf - y.gc) - (x.gf - x.gc) || y.gf - x.gf || x.t.localeCompare(y.t));
+  // Criterios generales (reglamento FIFA): puntos, diferencia de goles, goles a favor
+  st.sort((x, y) => y.pts - x.pts || (y.gf - y.gc) - (x.gf - x.gc) || y.gf - x.gf || 0);
+  // Desempate por ENFRENTAMIENTO DIRECTO entre equipos igualados en pts+DG+GF (mini-tabla solo con sus partidos)
+  const igualGeneral = (x, y) => x.pts === y.pts && (x.gf - x.gc) === (y.gf - y.gc) && x.gf === y.gf;
+  let bi = 0;
+  while (bi < st.length) {
+    let bj = bi + 1;
+    while (bj < st.length && igualGeneral(st[bi], st[bj])) bj++;
+    if (bj - bi >= 2) {
+      const bloque = st.slice(bi, bj), idxs = bloque.map(b => b.idx);
+      const h = {}; bloque.forEach(b => h[b.idx] = { pts:0, gf:0, gc:0 });
+      results.forEach(r => {
+        if (idxs.indexOf(r.a) >= 0 && idxs.indexOf(r.b) >= 0) {
+          h[r.a].gf += r.g1; h[r.a].gc += r.g2; h[r.b].gf += r.g2; h[r.b].gc += r.g1;
+          if (r.g1 > r.g2) h[r.a].pts += 3; else if (r.g2 > r.g1) h[r.b].pts += 3; else { h[r.a].pts++; h[r.b].pts++; }
+        }
+      });
+      bloque.sort((x, y) => h[y.idx].pts - h[x.idx].pts
+        || (h[y.idx].gf - h[y.idx].gc) - (h[x.idx].gf - h[x.idx].gc)
+        || h[y.idx].gf - h[x.idx].gf
+        || x.t.localeCompare(y.t));
+      for (let k = bi; k < bj; k++) st[k] = bloque[k - bi];
+    }
+    bi = bj;
+  }
   return { orden: st, completo: completos === 6 };
 }
 
@@ -932,7 +959,7 @@ function calcularPuntos(p) {
   // 5) Extras
   const ex = p.extras || {}, rex = res.extras || {};
   const norm = s => s ? s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split('(')[0].trim() : '';
-  if (rex.goleador && norm(ex.goleador) === norm(rex.goleador)) { pts += PTS.goleador; d.goleador = { pts: PTS.goleador }; }
+  if (rex.goleador && (norm(ex.goleador) === norm(rex.goleador) || (rex.goleador2 && norm(ex.goleador) === norm(rex.goleador2)))) { pts += PTS.goleador; d.goleador = { pts: PTS.goleador }; }
   if (rex.portero && norm(ex.portero) === norm(rex.portero)) { pts += PTS.portero; d.portero = { pts: PTS.portero }; }
   if (rex.mvp && norm(ex.mvp) === norm(rex.mvp)) { pts += PTS.mvp; d.mvp = { pts: PTS.mvp }; }
   if (rex.sorpresa && ex.sorpresa === rex.sorpresa) { pts += PTS.sorpresa; d.sorpresa = { pts: PTS.sorpresa }; }
@@ -1030,6 +1057,7 @@ async function checkAdmin() {
 function onResExtra() {
   resultados.extras = {
     goleador: document.getElementById('res-goleador').value.trim(),
+    goleador2: document.getElementById('res-goleador2').value.trim(),
     portero: document.getElementById('res-portero').value.trim(),
     mvp: document.getElementById('res-mvp').value.trim(),
     sorpresa: document.getElementById('res-sorpresa').value,
@@ -1041,6 +1069,7 @@ function onResExtra() {
 function cargarExtrasAdmin() {
   const ex = resultados.extras || {};
   if (ex.goleador) document.getElementById('res-goleador').value = ex.goleador;
+  if (ex.goleador2) document.getElementById('res-goleador2').value = ex.goleador2;
   if (ex.portero) document.getElementById('res-portero').value = ex.portero;
   if (ex.mvp) document.getElementById('res-mvp').value = ex.mvp;
   if (ex.sorpresa) document.getElementById('res-sorpresa').value = ex.sorpresa;
@@ -1291,10 +1320,14 @@ async function sincronizar() {
           tabla[g.name] = (tabla[g.name] || 0) + 1;
         }
       }
-      const top = Object.entries(tabla).sort((a, b) => b[1] - a[1])[0];
+      const tablaOrd = Object.entries(tabla).sort((a, b) => b[1] - a[1]);
+      const top = tablaOrd[0];
       resultados.extras = resultados.extras || {};
       resultados.extras.golesTorneo = totalGoles;
-      if (top) resultados.extras.goleador = top[0];
+      if (top) {
+        resultados.extras.goleador = top[0];
+        resultados.extras.goleador2 = (tablaOrd[1] && tablaOrd[1][1] === top[1]) ? tablaOrd[1][0] : '';
+      }
       // País sorpresa: semifinalista real no europeo/sudamericano
       const semifinalistas = new Set();
       data.matches.filter(m => m.round === 'Semi-final').forEach(m => {
