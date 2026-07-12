@@ -360,7 +360,7 @@
           <div class="field"><label>🎽 Mejor portero real</label><input type="text" id="res-portero" oninput="onResExtra()"></div>
           <div class="field"><label>🌟 Balón de Oro real</label><input type="text" id="res-mvp" oninput="onResExtra()"></div>
           <div class="field"><label>👑 Total goles del torneo</label><input type="number" id="res-goles-torneo" oninput="onResExtra()"></div>
-          <div class="field"><label>🎪 País sorpresa real en semifinales</label><select id="res-sorpresa" onchange="onResExtra()"><option value="">— Ninguno —</option></select></div>
+          <div class="field"><label>🎪 País sorpresa real en semifinales</label><select id="res-sorpresa" onchange="onResExtra()"><option value="">— Sin determinar —</option><option value="ninguno">— Ninguno (ningún país sorpresa en semis) —</option></select></div>
         </div>
         <button class="btn btn-primary" onclick="recalcularTodo(); showMsg('admin-msg','success','✅ Clasificación recalculada.')">🔄 RECALCULAR CLASIFICACIÓN</button>
       </div>
@@ -463,9 +463,8 @@
 'use strict';
 // ═════════════════ CONFIGURACIÓN (edítala a tu gusto) ═════════════════
 // ── SUPABASE: pega aquí la URL y la anon key de tu proyecto ──
-const SUPABASE_URL = 'https://ptqmhiwiywydsrnxthna.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0cW1oaXdpeXd5ZHNybnh0aG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwODAxNjcsImV4cCI6MjA5NjY1NjE2N30.zVd2NQWm9oavagpP-vveY3E5yDuCf5SxK1Qyp6b0xks';
-;
+const SUPABASE_URL = 'https://TU-PROYECTO.supabase.co';
+const SUPABASE_ANON_KEY = 'PEGA_AQUI_TU_ANON_KEY';
 const nubeActiva = () => !SUPABASE_URL.includes('TU-PROYECTO') && SUPABASE_ANON_KEY.length > 30;
 let adminClave = null;   // se guarda en memoria al entrar al panel
 
@@ -962,7 +961,7 @@ function calcularPuntos(p) {
   if (rex.goleador && (norm(ex.goleador) === norm(rex.goleador) || (rex.goleador2 && norm(ex.goleador) === norm(rex.goleador2)))) { pts += PTS.goleador; d.goleador = { pts: PTS.goleador }; }
   if (rex.portero && norm(ex.portero) === norm(rex.portero)) { pts += PTS.portero; d.portero = { pts: PTS.portero }; }
   if (rex.mvp && norm(ex.mvp) === norm(rex.mvp)) { pts += PTS.mvp; d.mvp = { pts: PTS.mvp }; }
-  if (rex.sorpresa && ex.sorpresa === rex.sorpresa) { pts += PTS.sorpresa; d.sorpresa = { pts: PTS.sorpresa }; }
+  if (rex.sorpresa) { const okS = (rex.sorpresa === 'ninguno') ? (!ex.sorpresa || ex.sorpresa === 'ninguno') : (ex.sorpresa === rex.sorpresa); if (okS) { pts += PTS.sorpresa; d.sorpresa = { pts: PTS.sorpresa }; } }
   if (rex.golesTorneo != null && rex.golesTorneo !== '' && ex.golesTorneo != null &&
       Math.abs(ex.golesTorneo - rex.golesTorneo) <= PTS.margenGoles) { pts += PTS.golesTorneo; d.golesTorneo = { pts: PTS.golesTorneo }; }
 
@@ -1335,7 +1334,7 @@ async function sincronizar() {
         if (t1) semifinalistas.add(t1); if (t2) semifinalistas.add(t2);
       });
       const sorpresa = [...semifinalistas].find(t => NO_EUR_SUD.includes(t));
-      resultados.extras.sorpresa = sorpresa || '';
+      resultados.extras.sorpresa = sorpresa || 'ninguno';
       avisos.push(`Torneo finalizado: goleador (${top ? top[0] + ', ' + top[1] + ' goles' : '—'}), ${totalGoles} goles totales${sorpresa ? ' y país sorpresa (' + sorpresa + ')' : ''} rellenados automáticamente. Revisa portero y MVP a mano.`);
     }
 
