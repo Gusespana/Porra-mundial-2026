@@ -942,9 +942,9 @@ function calcularPuntos(p) {
     const semiLosers = wn => { const s = setDe(wn, 'c4', 4); [wn['sf-0'], wn['sf-1']].forEach(t => s.delete(t)); return [...s]; };
     const predCua = semiLosers(p.winners).find(t => t !== predTer), realCua = semiLosers(res.winners).find(t => t !== realTer);
     if (predCamp && realCamp && predCamp === realCamp) { pts += PTS.campeon; d.campeon = { pts: PTS.campeon }; }
-    if (predSub && realSub && predSub === realSub) { pts += PTS.sub; d.sub = { pts: PTS.sub }; }
+    if (realCamp && predSub && realSub && predSub === realSub) { pts += PTS.sub; d.sub = { pts: PTS.sub }; }
     if (predTer && realTer && predTer === realTer) { pts += PTS.tercero; d.tercero = { pts: PTS.tercero }; }
-    if (predCua && realCua && predCua === realCua) { pts += PTS.cuarto; d.cuarto = { pts: PTS.cuarto }; }
+    if (realTer && res.winners['sf-0'] && res.winners['sf-1'] && predCua && realCua && predCua === realCua) { pts += PTS.cuarto; d.cuarto = { pts: PTS.cuarto }; }
 
     // 4) Marcador exacto de la final (finalistas correctos + marcador, orientación independiente)
     const pf = [p.winners['sf-0'], p.winners['sf-1']], rf = [res.winners['sf-0'], res.winners['sf-1']], ps = p.finalScore, rs = res.finalScore;
