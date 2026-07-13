@@ -1145,20 +1145,33 @@ async function cargarNube(silencioso) {
   }
 }
 
-let subirTimer = null;
+let subirTimer = null, subidaPendiente = false;
 function programarSubidaResultados() {
   if (!nubeActiva() || !adminClave) return;
+  subidaPendiente = true;
   clearTimeout(subirTimer);
-  subirTimer = setTimeout(subirResultados, 2000);
+  subirTimer = setTimeout(() => subirResultados(false), 1200);
 }
-async function subirResultados() {
+async function subirResultados(keepalive) {
+  if (!nubeActiva() || !adminClave) return;
+  clearTimeout(subirTimer);
+  subidaPendiente = false;
   try {
-    await sbFetch('/rest/v1/rpc/guardar_resultados', { method: 'POST', body: JSON.stringify({ p_datos: resultados, p_clave: adminClave }) });
+    await sbFetch('/rest/v1/rpc/guardar_resultados', { method: 'POST', keepalive: !!keepalive, body: JSON.stringify({ p_datos: resultados, p_clave: adminClave }) });
     setEstadoNube('☁️ Resultados sincronizados · ' + new Date().toLocaleTimeString('es-ES'), 'ok');
   } catch (e) {
-    showMsg('admin-msg', 'error', '❌ No se pudieron subir los resultados: ' + e.message);
+    subidaPendiente = true;   // conservar para reintentar
+    if (!keepalive) showMsg('admin-msg', 'error', '❌ No se pudieron subir los resultados: ' + e.message);
   }
 }
+
+// Volcado inmediato de resultados cuando la app pasa a segundo plano o se cierra
+// (clave en móvil: los temporizadores diferidos se suspenden al bloquear/cambiar de app).
+function flushResultados() {
+  if (subidaPendiente && nubeActiva() && adminClave) subirResultados(true);
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushResultados(); });
+window.addEventListener('pagehide', flushResultados);
 
 async function borrarApuesta(id, nombre) {
   if (!confirm('¿Borrar la apuesta de ' + nombre + '? No se puede deshacer.')) return;
