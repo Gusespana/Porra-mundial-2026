@@ -47,6 +47,9 @@
   .norma-item p { font-size:13.5px; line-height:1.5; color:#ccc; }
 
   .puntos-tabla, .ranking-table { width:100%; border-collapse:collapse; font-size:14px; }
+.sim-tabla th, .sim-tabla td { padding:6px 8px; border-bottom:1px solid var(--gris-medio); text-align:center; white-space:nowrap; }
+.sim-tabla th:nth-child(2), .sim-tabla td:nth-child(2) { text-align:left; }
+.sim-tabla th { color:var(--dorado-claro); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
   .puntos-tabla th, .ranking-table th { background:var(--gris); padding:10px 12px; text-align:left; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--texto-muted); }
   .puntos-tabla td { padding:9px 12px; border-bottom:1px solid var(--gris); }
   .puntos-tabla tr:last-child td { border-bottom:none; }
@@ -328,6 +331,12 @@
     </div>
 
     <div class="admin-section" id="admin-panel">
+      <div class="card">
+        <div class="card-title">🧪 Simulación privada (+8 por cruce)</div>
+        <p class="nota" style="margin-bottom:12px">Solo para ti — <strong>no cambia la porra real</strong> (que sigue con +3 por avanzar) ni lo ve ningún participante. Muestra cómo habría quedado la clasificación si, además del +3 por avanzar, se dieran <strong>+8 por cada cruce acertado</strong>: en <strong>dieciseisavos</strong> cuenta clavar el emparejamiento exacto (los dos equipos del cruce); de <strong>octavos a semifinales</strong>, que los dos equipos del cruce real lleguen a esa ronda.</p>
+        <button class="btn btn-primary" onclick="ejecutarSimulacion()">▶ Ejecutar simulación</button>
+        <div id="sim-resultado" style="margin-top:14px"></div>
+      </div>
       <div class="card">
         <div class="card-title">🌐 Sincronización automática de resultados</div>
         <p class="nota" style="margin-bottom:14px">Importa los resultados reales desde <strong>openfootball/worldcup.json</strong> (datos públicos en GitHub, sin API key, actualizados ~1 vez al día durante el torneo). Rellena los marcadores de grupos, marca los cruces de eliminatorias y, al acabar el torneo, el goleador, el total de goles y el país sorpresa. Después puedes corregir cualquier dato a mano.</p>
@@ -1831,6 +1840,55 @@ async function quitarFotoLider() {
   renderFotoLiderPreview();
   guardarResultados();
   showMsg('admin-msg', 'success', '✅ Foto quitada.');
+}
+
+// ═════════════════ SIMULACIÓN PRIVADA (+8 por cruce) ═════════════════
+function crucesExactosSim(p) {
+  // +8 por cada cruce real (dieciseisavos–semis) en el que el participante predijo que AMBOS
+  // equipos llegan a esa ronda. Independiente del cuadro (justo hayan rehecho o no).
+  const setDe = (wn, key, nn) => { const s = new Set(); for (let i = 0; i < nn; i++) { const t = wn[key + '-' + i]; if (t) s.add(t); } return s; };
+  const realR32 = buildR32(resultados.scores);
+  const predR32 = buildR32(p.scores);
+  if (!realR32 || !predR32) return 0;
+  const rp = propagate(realR32, resultados.winners);
+  let n = 0;
+  // Dieciseisavos: emparejamiento EXACTO — los dos equipos del cruce coinciden con el real en el mismo cruce oficial.
+  for (let i = 0; i < realR32.length; i++) {
+    const rc = realR32[i], pc = predR32[i];
+    if (rc && pc && rc[0] && rc[1] && pc[0] && pc[1] &&
+        ((pc[0] === rc[0] && pc[1] === rc[1]) || (pc[0] === rc[1] && pc[1] === rc[0]))) n++;
+  }
+  // Octavos–semifinales: que los dos equipos del cruce real lleguen a esa ronda (independiente del cuadro).
+  const rondas = [
+    [rp.o8, setDe(p.winners, 'd16', 16)],
+    [rp.c4, setDe(p.winners, 'o8', 8)],
+    [rp.sf, setDe(p.winners, 'c4', 4)]
+  ];
+  rondas.forEach(([cruces, llegan]) => {
+    cruces.forEach(([a, b]) => { if (a && b && llegan.has(a) && llegan.has(b)) n++; });
+  });
+  return n;
+}
+function ejecutarSimulacion() {
+  const cont = document.getElementById('sim-resultado');
+  if (!participantes.length) { cont.innerHTML = '<p class="nota">No hay participantes cargados.</p>'; return; }
+  if (!buildR32(resultados.scores)) { cont.innerHTML = '<p class="nota">Los resultados de grupos están incompletos; no se puede simular el cuadro todavía.</p>'; return; }
+  const filas = participantes.map(p => {
+    const n = crucesExactosSim(p);
+    return { nombre: p.nombre, real: p.puntos, cruces: n, bonus: n * 8, simulado: p.puntos + n * 8 };
+  });
+  const realOrden = [...filas].sort((a, b) => b.real - a.real || a.nombre.localeCompare(b.nombre));
+  const rankReal = {}; realOrden.forEach((f, i) => rankReal[f.nombre] = i + 1);
+  filas.sort((a, b) => b.simulado - a.simulado || b.real - a.real || a.nombre.localeCompare(b.nombre));
+  let html = '<div style="overflow-x:auto"><table class="sim-tabla"><thead><tr><th>#</th><th>Participante</th><th>Real</th><th>Cruces ✓</th><th>Bonus</th><th>Simulado</th><th>Mov.</th></tr></thead><tbody>';
+  filas.forEach((f, i) => {
+    const rankSim = i + 1, delta = rankReal[f.nombre] - rankSim;
+    const mov = delta > 0 ? '▲' + delta : delta < 0 ? '▼' + (-delta) : '–';
+    const col = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--error)' : 'var(--texto-muted)';
+    html += '<tr><td>' + rankSim + '</td><td>' + esc(f.nombre) + '</td><td>' + f.real + '</td><td>' + f.cruces + '</td><td style="color:var(--dorado-claro)">+' + f.bonus + '</td><td style="font-weight:700;color:var(--dorado)">' + f.simulado + '</td><td style="color:' + col + ';font-weight:600">' + mov + '</td></tr>';
+  });
+  html += '</tbody></table></div><p class="nota" style="margin-top:8px">Máx. 30 cruces (16+8+4+2) × 8 = 240 pts de bonus posibles. «Mov.» = cambio de posición respecto a la clasificación real. Esto no altera la porra real.</p>';
+  cont.innerHTML = html;
 }
 
 // ═════════════════ INIT ═════════════════
