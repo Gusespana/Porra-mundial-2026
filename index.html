@@ -333,7 +333,7 @@
     <div class="admin-section" id="admin-panel">
       <div class="card">
         <div class="card-title">🧪 Simulación privada (+8 por cruce)</div>
-        <p class="nota" style="margin-bottom:12px">Solo para ti — <strong>no cambia la porra real</strong> (que sigue con +3 por avanzar) ni lo ve ningún participante. Muestra cómo habría quedado la clasificación si, además del +3 por avanzar, se dieran <strong>+8 por cada cruce acertado</strong>: en <strong>dieciseisavos</strong> cuenta clavar el emparejamiento exacto (los dos equipos del cruce); de <strong>octavos a semifinales</strong>, que los dos equipos del cruce real lleguen a esa ronda.</p>
+        <p class="nota" style="margin-bottom:12px">Solo para ti — <strong>no cambia la porra real</strong> (que sigue con +3 por avanzar) ni lo ve ningún participante. Muestra cómo habría quedado la clasificación si, además del +3 por avanzar, se dieran <strong>+5 por cada cruce acertado</strong> (así, +3 por avanzar + +5 por el cruce = +8 en un cruce perfecto): en <strong>dieciseisavos</strong> cuenta clavar el emparejamiento exacto (los dos equipos del cruce); de <strong>octavos a semifinales</strong>, que los dos equipos del cruce real lleguen a esa ronda.</p>
         <button class="btn btn-primary" onclick="ejecutarSimulacion()">▶ Ejecutar simulación</button>
         <div id="sim-resultado" style="margin-top:14px"></div>
       </div>
@@ -1875,7 +1875,7 @@ function ejecutarSimulacion() {
   if (!buildR32(resultados.scores)) { cont.innerHTML = '<p class="nota">Los resultados de grupos están incompletos; no se puede simular el cuadro todavía.</p>'; return; }
   const filas = participantes.map(p => {
     const n = crucesExactosSim(p);
-    return { nombre: p.nombre, real: p.puntos, cruces: n, bonus: n * 8, simulado: p.puntos + n * 8 };
+    return { nombre: p.nombre, real: p.puntos, cruces: n, bonus: n * 5, simulado: p.puntos + n * 5 };
   });
   const realOrden = [...filas].sort((a, b) => b.real - a.real || a.nombre.localeCompare(b.nombre));
   const rankReal = {}; realOrden.forEach((f, i) => rankReal[f.nombre] = i + 1);
@@ -1887,7 +1887,7 @@ function ejecutarSimulacion() {
     const col = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--error)' : 'var(--texto-muted)';
     html += '<tr><td>' + rankSim + '</td><td>' + esc(f.nombre) + '</td><td>' + f.real + '</td><td>' + f.cruces + '</td><td style="color:var(--dorado-claro)">+' + f.bonus + '</td><td style="font-weight:700;color:var(--dorado)">' + f.simulado + '</td><td style="color:' + col + ';font-weight:600">' + mov + '</td></tr>';
   });
-  html += '</tbody></table></div><p class="nota" style="margin-top:8px">Máx. 30 cruces (16+8+4+2) × 8 = 240 pts de bonus posibles. «Mov.» = cambio de posición respecto a la clasificación real. Esto no altera la porra real.</p>';
+  html += '</tbody></table></div><p class="nota" style="margin-top:8px">Máx. 30 cruces (16+8+4+2) × 5 = 150 pts de bonus posibles. «Mov.» = cambio de posición respecto a la clasificación real. Esto no altera la porra real.</p>';
   cont.innerHTML = html;
 }
 
